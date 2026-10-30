@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/google/uuid"
+	"golang.org/x/text/language"
 
 	"github.com/gelozr/go-dash/internal/auth"
 	"github.com/gelozr/go-dash/internal/http/response"
@@ -109,16 +110,16 @@ func RequestID() fiber.Handler {
 	}
 }
 
+// localeMatcher lists the locales the validator has translations for; the first is the fallback.
+var localeMatcher = language.NewMatcher([]language.Tag{language.English, language.French})
+
 func RequestLocale() fiber.Handler {
 	return func(c fiber.Ctx) error {
-		const hdr = "Accept-Language"
+		// browsers send e.g. "fr-FR,fr;q=0.9", which must resolve to a translator name like "fr"
+		tag, _ := language.MatchStrings(localeMatcher, c.Get("Accept-Language"))
+		base, _ := tag.Base()
 
-		l := c.Get(hdr)
-		if l == "" {
-			l = "en"
-		}
-
-		ctx := context.WithValue(c.Context(), reqLocaleCtxKey, l)
+		ctx := context.WithValue(c.Context(), reqLocaleCtxKey, base.String())
 		c.SetContext(ctx)
 
 		return c.Next()
