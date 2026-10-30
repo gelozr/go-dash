@@ -62,7 +62,8 @@ func InitApp() (*App, error) {
 	invoiceGormStore := invoice.NewStore(dbDB, logger)
 	invoiceService := invoice.NewService(invoiceGormStore, logger)
 	createInvoice := app.NewCreateInvoice(service, invoiceService, dbDB, logger)
-	invoiceHandler := http.NewInvoiceHandler(invoiceService, createInvoice, validator, logger)
+	updateInvoice := app.NewUpdateInvoice(service, invoiceService, dbDB)
+	invoiceHandler := http.NewInvoiceHandler(invoiceService, createInvoice, updateInvoice, validator, logger)
 	routeInitializer := http.SetupFiberRoutes(fiberServer, guard, authHandler, dashboardHandler, userHandler, customerHandler, invoiceHandler)
 	bootstrapApp := AppProvider(configConfig, dbDB, logger, fiberServer, registerInitializer, routeInitializer)
 	return bootstrapApp, nil
