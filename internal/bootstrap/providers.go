@@ -72,6 +72,7 @@ var AppServiceProviders = wire.NewSet(
 
 	// USE CASES
 	app.NewCreateInvoice,
+	app.NewUpdateInvoice,
 )
 
 var HTTPProviders = wire.NewSet(

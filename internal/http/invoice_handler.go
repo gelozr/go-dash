@@ -21,6 +21,7 @@ import (
 type InvoiceHandler struct {
 	invSvc        *invoice.Service
 	createInvoice *app.CreateInvoice
+	updateInvoice *app.UpdateInvoice
 	validator     validation.Validator
 	logger        logger.Logger
 }
@@ -28,12 +29,14 @@ type InvoiceHandler struct {
 func NewInvoiceHandler(
 	invSvc *invoice.Service,
 	createInvoice *app.CreateInvoice,
+	updateInvoice *app.UpdateInvoice,
 	validator validation.Validator,
 	logger logger.Logger,
 ) *InvoiceHandler {
 	return &InvoiceHandler{
 		invSvc:        invSvc,
 		createInvoice: createInvoice,
+		updateInvoice: updateInvoice,
 		validator:     validator,
 		logger:        logger.With("component", "http.invoice"),
 	}
@@ -145,11 +148,13 @@ func (h *InvoiceHandler) Update(c fiber.Ctx) error {
 		return err
 	}
 
-	inv, err := h.invSvc.Update(c.Context(), id, updateInput)
+	inv, err := h.updateInvoice.Execute(c.Context(), id, updateInput)
 	if err != nil {
 		switch {
 		case errors.Is(err, invoice.ErrInvoiceNotFound):
 			return fiber.NewError(fiber.StatusNotFound, "invoice not found.")
+		case errors.Is(err, customer.ErrCustomerNotFound):
+			return fiber.NewError(fiber.StatusNotFound, "customer not found.")
 		default:
 			return fmt.Errorf("update invoice: %w", err)
 		}
