@@ -47,25 +47,27 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	viper.SetConfigFile(".env")
-	viper.SetConfigType("env")
-	if err := viper.ReadInConfig(); err != nil {
+	// BindStruct makes Unmarshal read env vars for every field, not only keys that also appear in .env
+	v := viper.NewWithOptions(viper.ExperimentalBindStruct())
+	v.SetConfigFile(".env")
+	v.SetConfigType("env")
+	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading .env: %w", err)
 	}
 
-	if len(viper.AllKeys()) == 0 {
+	if len(v.AllKeys()) == 0 {
 		return nil, fmt.Errorf("no .env variables found")
 	}
 
 	// allow real ENV to override
-	viper.AutomaticEnv()
+	v.AutomaticEnv()
 
 	var cfg Config
-	if err := viper.Unmarshal(&cfg); err != nil {
+	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	switch viper.GetString("APP_ENV") {
+	switch v.GetString("APP_ENV") {
 	case "production":
 		cfg.AppEnv = Production
 	case "staging":
