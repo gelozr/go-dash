@@ -2,23 +2,28 @@ package auth
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
+	himoauth "github.com/gelozr/himo/auth"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrRefreshSessionNotFound = errors.New("refresh session not found")
+	errRefreshSessionNotFound = fmt.Errorf("%w: refresh session not found", himoauth.ErrInvalidToken)
+	errRefreshSessionUsed     = fmt.Errorf("%w: refresh session already used", himoauth.ErrInvalidToken)
+	errRefreshSessionExpired  = fmt.Errorf("%w: refresh session expired", himoauth.ErrInvalidToken)
 )
 
-type RefreshStore interface {
-	Get(context.Context, uuid.UUID) (RefreshSession, error)
-	Insert(context.Context, RefreshSession) (RefreshSession, error)
-	Update(context.Context, RefreshSession) error
+// refreshStore is an internal seam so tests can run without a database.
+type refreshStore interface {
+	Get(context.Context, uuid.UUID) (refreshSession, error)
+	Insert(context.Context, refreshSession) error
+	// MarkUsed returns errRefreshSessionUsed if the session was already used.
+	MarkUsed(context.Context, uuid.UUID) error
 }
 
-type RefreshSession struct {
+type refreshSession struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
 	ExpiresAt time.Time
@@ -26,8 +31,6 @@ type RefreshSession struct {
 	CreatedAt time.Time
 }
 
-type UpdateRefreshInput struct {
-	UserID    uuid.UUID
-	ExpiresAt time.Time
-	Used      bool
+func (refreshSession) TableName() string {
+	return "refresh_sessions"
 }

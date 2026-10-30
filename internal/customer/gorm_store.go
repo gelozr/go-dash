@@ -132,6 +132,9 @@ func (s *GormStore) Insert(ctx context.Context, c Customer) (*Customer, error) {
 	model := toModel(c)
 
 	if err := s.DB(ctx).Create(&model).Error; err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, ErrEmailAlreadyTaken
+		}
 		return nil, fmt.Errorf("store customer: %w", err)
 	}
 

@@ -48,19 +48,13 @@ func InitApp() (*App, error) {
 	userGormStore := user.NewStore(gormDB, logger)
 	userService := user.NewService(userGormStore, logger)
 	hashingManager := hashing.NewManager(configConfig)
-	dbUserProvider := auth.NewDBUserProvider(userService, hashingManager)
-	gormRefreshStore := auth.NewGormRefreshStore(gormDB, logger)
-	token := auth.NewToken(gormRefreshStore)
-	jwtDriver := auth.NewJWTDriver(configConfig, token)
-	auth2Manager, err := AuthProvider(dbUserProvider, jwtDriver)
-	if err != nil {
-		return nil, err
-	}
+	gormTxManager := db.NewTxManager(gormDB)
+	guard := auth.NewGuard(configConfig, userService, hashingManager, gormDB, gormTxManager)
 	validator, err := gp.New()
 	if err != nil {
 		return nil, err
 	}
-	authHandler := http.NewAuthHandler(auth2Manager, validator)
+	authHandler := http.NewAuthHandler(guard, validator)
 	dashboardGormStore := dashboard.NewStore(gormDB, logger)
 	dashboardService := dashboard.NewService(dashboardGormStore, logger)
 	dashboardHandler := http.NewDashboardHandler(dashboardService, logger)
@@ -68,10 +62,9 @@ func InitApp() (*App, error) {
 	customerHandler := http.NewCustomerHandler(service, validator, logger)
 	invoiceGormStore := invoice.NewStore(gormDB, logger)
 	invoiceService := invoice.NewService(invoiceGormStore, logger)
-	gormTxManager := db.NewTxManager(gormDB)
 	createInvoice := app.NewCreateInvoice(service, invoiceService, gormTxManager, logger)
 	invoiceHandler := http.NewInvoiceHandler(invoiceService, createInvoice, validator, logger)
-	routeInitializer := http.SetupFiberRoutes(fiberServer, auth2Manager, authHandler, dashboardHandler, userHandler, customerHandler, invoiceHandler)
+	routeInitializer := http.SetupFiberRoutes(fiberServer, guard, authHandler, dashboardHandler, userHandler, customerHandler, invoiceHandler)
 	bootstrapApp, err := AppProvider(configConfig, gormDB, logger, fiberServer, registerInitializer, routeInitializer)
 	if err != nil {
 		return nil, err

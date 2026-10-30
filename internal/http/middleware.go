@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	himoauth "github.com/gelozr/himo/auth2"
+	himoauth "github.com/gelozr/himo/auth"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/google/uuid"
@@ -33,41 +33,26 @@ var (
 	userIDCtxKey    = ctxKey("user_id")
 )
 
-func AuthMiddleware(a himoauth.Auth, guardName string) fiber.Handler {
+func AuthMiddleware(g *auth.Guard) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		guard, err := a.Handler(guardName)
+		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
+		if token == "" {
+			return fiber.NewError(http.StatusUnauthorized, "missing authorization header")
+		}
+
+		userID, err := g.Verify(c.Context(), token)
 		if err != nil {
-			return fmt.Errorf("guard: %w", err)
+			switch {
+			case errors.Is(err, himoauth.ErrTokenExpired):
+				return fiber.NewError(http.StatusUnauthorized, "expired token")
+			case errors.Is(err, himoauth.ErrInvalidToken):
+				return fiber.NewError(http.StatusUnauthorized, "invalid token")
+			default:
+				return fmt.Errorf("verify token: %w", err)
+			}
 		}
 
-		var verified himoauth.Verified[any]
-
-		switch guardName {
-		case "jwt":
-			token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
-			if token == "" {
-				return fiber.NewError(http.StatusUnauthorized, "missing authorization header")
-			}
-
-			verified, err = guard.Validate(c.Context(), token)
-			if err != nil {
-				switch {
-				case errors.Is(err, auth.ErrJWTInvalid):
-					return fiber.NewError(http.StatusUnauthorized, "invalid token")
-				case errors.Is(err, auth.ErrJWTExpired):
-					return fiber.NewError(http.StatusUnauthorized, "expired token")
-				default:
-					return fmt.Errorf("parse token: %w", err)
-				}
-			}
-
-		default:
-			return fmt.Errorf("auth middleware: unknown guard '%s'", guard)
-		}
-
-		ctx := himoauth.WithUserCtx(c.Context(), verified)
-
-		c.SetContext(ctx)
+		c.SetContext(context.WithValue(c.Context(), userIDCtxKey, userID))
 		return c.Next()
 	}
 }

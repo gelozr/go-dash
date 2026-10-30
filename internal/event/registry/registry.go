@@ -25,7 +25,6 @@ func RegisterAll(
 		_ = custCreatedBus.SetAsyncHandler(asyncHandler[customer.Created](log))
 
 		custCreatedBus.SubscribeAsync(SendWelcomeEmail(custSvc, mailer))
-		custCreatedBus.SubscribeAsync(SendVerifyEmail(custSvc))
 
 		broker.RegisterBus(custCreatedBus)
 	}
@@ -59,36 +58,17 @@ func SendWelcomeEmail(custSvc *customer.Service, mailer mail.Mailer) event.Handl
 		}
 
 		m := &mail.Message{
-			From: mail.Address{
-				Name:    "test from",
-				Address: "test@from.dev",
-			},
 			To: []mail.Address{{
 				Name:    cust.Name,
 				Address: cust.Email,
 			}},
 			Subject: "Welcome subject",
 			HTML:    "<p>Welcome message</p>",
-			// Text:    "Welcome message",
-			Headers: nil,
 		}
 
 		if err = mailer.Send(ctx, m); err != nil {
 			return fmt.Errorf("SendWelcomeEmail: send welcome email: %w", err)
 		}
-
-		return nil
-	}
-}
-
-func SendVerifyEmail(custSvc *customer.Service) event.Handler[customer.Created] {
-	return func(ctx context.Context, e customer.Created) error {
-		cust, err := custSvc.GetByID(ctx, e.ID)
-		if err != nil {
-			return fmt.Errorf("SendVerifyEmail: get customer by id: %w", err)
-		}
-
-		fmt.Println("Email verification sent", e.ID, cust.Name)
 
 		return nil
 	}

@@ -1,14 +1,14 @@
 package http
 
 import (
-	auth "github.com/gelozr/himo/auth2"
+	"github.com/gelozr/go-dash/internal/auth"
 )
 
 type RouteInitializer struct{}
 
 func SetupFiberRoutes(
 	s *FiberServer,
-	auth *auth.Manager,
+	guard *auth.Guard,
 	authH *AuthHandler,
 	dashH *DashboardHandler,
 	userH *UserHandler,
@@ -18,6 +18,8 @@ func SetupFiberRoutes(
 
 	r := s.app.Group("/api")
 
+	// fiber v3 runs a route's handlers in argument order, so middleware must come before the handler
+
 	// auth routes
 	ag := r.Group("/auth", loggerKeyMiddleware("http.auth"), rateLimiter(5))
 	{
@@ -26,35 +28,34 @@ func SetupFiberRoutes(
 	}
 
 	// dashboard routes
-	// dg := r.Group("/dash", loggerKeyMiddleware("http.dashboard"), AuthMiddleware(authSvc))
-	dg := r.Group("/dash", loggerKeyMiddleware("http.dashboard"), AuthMiddleware(auth, "jwt"))
+	dg := r.Group("/dash", loggerKeyMiddleware("http.dashboard"), AuthMiddleware(guard))
 	{
 		dg.Get("/overview", dashH.GetOverview)
 		dg.Get("/revenues", dashH.GetMonthlyRevenues)
 	}
 
 	// user routes
-	r.Get("/users/email/:email", userH.GetByEmail, loggerKeyMiddleware("http.user"))
+	r.Get("/users/email/:email", loggerKeyMiddleware("http.user"), AuthMiddleware(guard), userH.GetByEmail)
 
 	// customer routes
-	cg := r.Group("/customers", loggerKeyMiddleware("http.customer"))
+	cg := r.Group("/customers", loggerKeyMiddleware("http.customer"), AuthMiddleware(guard))
 	{
 		cg.Get("/", custH.List)
 		cg.Get("/filtered", custH.SearchWithInvoiceInfo)
 		cg.Get("/:id", custH.Get)
-		cg.Post("/", custH.Create, rateLimiter(30))
+		cg.Post("/", rateLimiter(30), custH.Create)
 	}
 
 	// invoice routes
-	ig := r.Group("/invoices", loggerKeyMiddleware("http.invoice"))
+	ig := r.Group("/invoices", loggerKeyMiddleware("http.invoice"), AuthMiddleware(guard))
 	{
 		ig.Get("/latest", invH.GetLatest)
 		ig.Get("/filtered", invH.Search)
 
 		ig.Get("/:id", invH.Get)
-		ig.Post("/", invH.Create, rateLimiter(30))
-		ig.Patch("/:id", invH.Update, rateLimiter(30))
-		ig.Delete("/:id", invH.Delete, rateLimiter(30))
+		ig.Post("/", rateLimiter(30), invH.Create)
+		ig.Patch("/:id", rateLimiter(30), invH.Update)
+		ig.Delete("/:id", rateLimiter(30), invH.Delete)
 	}
 
 	return RouteInitializer{}

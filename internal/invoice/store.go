@@ -22,7 +22,7 @@ type Store interface {
 	Update(context.Context, uuid.UUID, UpdateInput) error
 	Delete(context.Context, uuid.UUID) error
 
-	ListWithCustomerInfo(context.Context, listing.SortOrder) ([]WithCustomerInfo, error)
+	ListWithCustomerInfo(ctx context.Context, sort listing.SortOrder, limit int) ([]WithCustomerInfo, error)
 }
 
 type SearchFilter struct {

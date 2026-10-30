@@ -41,6 +41,7 @@ type Message struct {
 type manager struct {
 	mailers       map[Driver]Mailer
 	defaultDriver Driver
+	defaultFrom   Address
 }
 
 func NewManager(cfg *config.Config) Manager {
@@ -50,6 +51,7 @@ func NewManager(cfg *config.Config) Manager {
 	return &manager{
 		mailers:       mailers,
 		defaultDriver: getDefaultDriver(cfg),
+		defaultFrom:   Address{Name: cfg.MailFromName, Address: cfg.MailFromAddress},
 	}
 }
 
@@ -64,6 +66,13 @@ func (m *manager) Send(ctx context.Context, msg *Message) error {
 	mailer, err := m.Mailer(m.defaultDriver)
 	if err != nil {
 		return err
+	}
+
+	if msg.From.Address == "" {
+		msg.From = m.defaultFrom
+	}
+	if msg.From.Address == "" {
+		return errors.New("mail: no sender address, set MAIL_FROM_ADDRESS")
 	}
 
 	return mailer.Send(ctx, msg)

@@ -32,8 +32,9 @@ func NewSMTPMailer(cfg *config.Config) *SMTPMailer {
 	}
 }
 
-func (s *SMTPMailer) buildMessageID(sb *strings.Builder) {
-	sb.WriteString(fmt.Sprintf("Message-ID: <%d.%s@testdomain.dev>\r\n", time.Now().UnixNano(), "testdomain.dev"))
+func (s *SMTPMailer) buildMessageID(sb *strings.Builder, m *Message) {
+	domain := m.From.Address[strings.LastIndex(m.From.Address, "@")+1:]
+	sb.WriteString(fmt.Sprintf("Message-ID: <%d.%s@%s>\r\n", time.Now().UnixNano(), uuid.NewString(), domain))
 }
 
 func (s *SMTPMailer) buildDate(sb *strings.Builder) {
@@ -87,7 +88,7 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
 	sb.WriteString("MIME-Version: 1.0\r\n")
 
 	s.buildDate(&sb)
-	s.buildMessageID(&sb)
+	s.buildMessageID(&sb, m)
 	s.buildSubject(&sb, m)
 	s.buildFrom(&sb, m)
 	s.buildTo(&sb, m)
@@ -123,6 +124,7 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
 
 			client, err = smtp.NewClient(conn, s.Host)
 			if err != nil {
+				_ = conn.Close()
 				done <- fmt.Errorf("smtp new client: %w", err)
 				return
 			}
@@ -135,16 +137,15 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
 
 			if ok, _ := client.Extension("STARTTLS"); ok {
 				if err = client.StartTLS(tlsCfg); err != nil {
+					_ = client.Close()
 					done <- fmt.Errorf("start tls: %w", err)
+					return
 				}
 			}
 		}
 
-		defer func() {
-			if err = client.Quit(); err != nil {
-				done <- fmt.Errorf("quit: %w", err)
-			}
-		}()
+		// done is written exactly once below; a second send would block forever once Send has returned
+		defer client.Close()
 
 		if err = client.Auth(auth); err != nil {
 			done <- fmt.Errorf("client auth: %w", err)
@@ -175,6 +176,11 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
 
 		if err = w.Close(); err != nil {
 			done <- fmt.Errorf("writer close: %w", err)
+			return
+		}
+
+		if err = client.Quit(); err != nil {
+			done <- fmt.Errorf("quit: %w", err)
 			return
 		}
 

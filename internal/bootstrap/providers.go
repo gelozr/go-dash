@@ -6,8 +6,6 @@ import (
 	"github.com/google/wire"
 	"gorm.io/gorm"
 
-	himoauth "github.com/gelozr/himo/auth2"
-
 	"github.com/gelozr/go-dash/internal/app"
 	"github.com/gelozr/go-dash/internal/auth"
 	"github.com/gelozr/go-dash/internal/config"
@@ -57,18 +55,7 @@ var AppServiceProviders = wire.NewSet(
 	wire.Bind(new(mail.Mailer), new(mail.Manager)),
 
 	// AUTH
-	auth.NewGormRefreshStore,
-	wire.Bind(new(auth.RefreshStore), new(*auth.GormRefreshStore)),
-	auth.NewToken,
-	auth.NewDBUserProvider,
-	auth.NewJWTDriver,
-	AuthProvider,
-	// wire.Bind(new(himoauth.Authenticator), new(*himoauth.Provider)),
-	// wire.Bind(new(himoauth.LoginHandler), new(*himoauth.Provider)),
-	// wire.Bind(new(himoauth.LogoutHandler), new(*himoauth.Provider)),
-	// wire.Bind(new(himoauth.Checker), new(*himoauth.Provider)),
-	// wire.Bind(new(himoauth.TokenRefresher), new(*himoauth.Provider)),
-	wire.Bind(new(himoauth.Auth), new(*himoauth.Manager)),
+	auth.NewGuard,
 
 	// STORE & SERVICES
 	customer.NewStore,
@@ -101,26 +88,10 @@ var HTTPProviders = wire.NewSet(
 
 	// ENGINE
 	http.NewFiberServer,
-	// wire.Bind(new(Server), new(*http.FiberServer)),
 
 	// ROUTES
 	http.SetupFiberRoutes,
 )
-
-func AuthProvider(dbUserProvider *auth.DBUserProvider, jwtDriver *auth.JWTDriver) (*himoauth.Manager, error) {
-	a := himoauth.New()
-	opt := himoauth.HandlerOption{Driver: jwtDriver, UserProvider: dbUserProvider}
-
-	if err := a.Extend("jwt", opt); err != nil {
-		return nil, fmt.Errorf("auth extend: %w", err)
-	}
-
-	if err := a.SetDefaultGuard("jwt"); err != nil {
-		return nil, fmt.Errorf("set default guard: %w", err)
-	}
-
-	return a, nil
-}
 
 func AppProvider(
 	cfg *config.Config,

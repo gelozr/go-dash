@@ -70,8 +70,9 @@ func (s *Service) Create(ctx context.Context, c Customer) (*Customer, error) {
 		return nil, fmt.Errorf("insert customer: %w", err)
 	}
 
+	// the customer is already saved; failing here would make the client retry into "email taken"
 	if err = s.event.Publish(ctx, Created{ID: cust.ID}); err != nil {
-		return nil, fmt.Errorf("publish event: %w", err)
+		s.logger.ErrorContext(ctx, "publish customer created", "customer_id", cust.ID, "error", err)
 	}
 
 	return cust, nil

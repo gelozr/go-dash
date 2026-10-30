@@ -41,7 +41,7 @@ func (req *CreateInvoice) ToInvoice() (invoice.Invoice, error) {
 
 type UpdateInvoice struct {
 	CustomerID optional.Optional[*string] `json:"customer_id" validate:"omitnil,required,uuid4"`
-	Amount     float64                    `json:"amount" validate:"min=0,max=100"`
+	Amount     float64                    `json:"amount" validate:"min=0"`
 	Status     string                     `json:"status" validate:"required"`
 	Date       optional.Optional[*string] `json:"date" validate:"omitnil,required,rfc3339"`
 	// Date Optional[nullable.Null[string]] `json:"date" validate:"omitnil,required,rfc3339"`

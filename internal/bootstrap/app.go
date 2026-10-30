@@ -79,13 +79,11 @@ func (a *App) Logger() logger.Logger {
 func (a *App) Close() error {
 	var errs []error
 
-	if err := a.logger.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("failed to close logger: %w", err))
+	if logCloser, ok := a.logger.(io.Closer); ok {
+		errs = append(errs, logCloser.Close())
 	}
 
-	if err := a.dbCloser.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("failed to close db connection: %w", err))
-	}
+	errs = append(errs, a.dbCloser.Close())
 
 	return errors.Join(errs...)
 }

@@ -61,7 +61,9 @@ func (h *InvoiceHandler) Get(c fiber.Ctx) error {
 }
 
 func (h *InvoiceHandler) GetLatest(c fiber.Ctx) error {
-	invs, err := h.invSvc.ListWithCustomerInfo(c.Context(), listing.SortLatest)
+	limit := min(max(getDefaultNum(c.Query("limit"), 5), 1), 100)
+
+	invs, err := h.invSvc.ListWithCustomerInfo(c.Context(), listing.SortLatest, limit)
 	if err != nil {
 		return fmt.Errorf("list invoices: %w", err)
 	}

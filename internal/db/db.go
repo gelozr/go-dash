@@ -36,6 +36,7 @@ func Open(cfg *config.Config, log logger.Logger) (*gorm.DB, error) {
 	)
 
 	db, err := gorm.Open(mysql.Open(dns), &gorm.Config{
+		TranslateError: true,
 		Logger: gormlogger.New(l, gormlogger.Config{
 			SlowThreshold:             time.Second,
 			Colorful:                  false,

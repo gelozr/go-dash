@@ -24,8 +24,8 @@ func NewService(store Store, logger logger.Logger) *Service {
 	}
 }
 
-func (s *Service) ListWithCustomerInfo(ctx context.Context, sort listing.SortOrder) ([]WithCustomerInfo, error) {
-	out, err := s.store.ListWithCustomerInfo(ctx, sort)
+func (s *Service) ListWithCustomerInfo(ctx context.Context, sort listing.SortOrder, limit int) ([]WithCustomerInfo, error) {
+	out, err := s.store.ListWithCustomerInfo(ctx, sort, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list invoices: %w", err)
 	}

@@ -147,6 +147,14 @@ func FromPtr[T any](v *T) Optional[T] {
 	}
 }
 
+// Ptr returns nil when the value is missing or null, so a NULL column doesn't read back as the zero value.
+func (o Optional[T]) Ptr() *T {
+	if !o.IsPresent || o.IsNull {
+		return nil
+	}
+	return &o.Val
+}
+
 func StringToUUID[T ~string | ~*string](o Optional[T]) (Optional[uuid.UUID], error) {
 	if !o.IsPresent {
 		return Optional[uuid.UUID]{}, nil
@@ -165,7 +173,7 @@ func StringToUUID[T ~string | ~*string](o Optional[T]) (Optional[uuid.UUID], err
 
 	u, err := uuid.Parse(str)
 	if err != nil {
-		return Optional[uuid.UUID]{}, fmt.Errorf("cannot parse %s as UUID: %w", o.Val, err)
+		return Optional[uuid.UUID]{}, fmt.Errorf("cannot parse %q as UUID: %w", str, err)
 	}
 	return Optional[uuid.UUID]{Val: u, IsPresent: true}, nil
 }
@@ -188,7 +196,7 @@ func StringToTime[T ~string | ~*string](o Optional[T], layout string) (Optional[
 
 	t, err := time.Parse(layout, str)
 	if err != nil {
-		return Optional[time.Time]{}, fmt.Errorf("cannot parse %s as Time: %w", o.Val, err)
+		return Optional[time.Time]{}, fmt.Errorf("cannot parse %q as Time: %w", str, err)
 	}
 
 	return Optional[time.Time]{Val: t, IsPresent: true}, nil

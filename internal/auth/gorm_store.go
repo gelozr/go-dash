@@ -4,64 +4,54 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/gelozr/go-dash/internal/db"
-	"github.com/gelozr/go-dash/internal/logger"
 )
 
-type GormRefreshStore struct {
-	db     *gorm.DB
-	logger logger.Logger
+type gormRefreshStore struct {
+	db *gorm.DB
 }
 
-func NewGormRefreshStore(db *gorm.DB, logger logger.Logger) *GormRefreshStore {
-	return &GormRefreshStore{
-		db:     db,
-		logger: logger,
-	}
-}
+var _ refreshStore = (*gormRefreshStore)(nil)
 
-func (s *GormRefreshStore) DB(ctx context.Context) *gorm.DB {
+func (s *gormRefreshStore) DB(ctx context.Context) *gorm.DB {
 	if gormDB, ok := db.FromCtx(ctx); ok {
-		return gormDB
+		return gormDB.WithContext(ctx)
 	}
-
-	return s.db
+	return s.db.WithContext(ctx)
 }
 
-func (s *GormRefreshStore) Get(ctx context.Context, id uuid.UUID) (RefreshSession, error) {
-	var r RefreshSession
+func (s *gormRefreshStore) Get(ctx context.Context, id uuid.UUID) (refreshSession, error) {
+	var r refreshSession
 
-	if err := s.DB(ctx).First(&r, id).Error; err != nil {
-		switch {
-		case errors.Is(err, gorm.ErrRecordNotFound):
-			return r, ErrRefreshSessionNotFound
-		default:
-			return r, fmt.Errorf("query refresh session: %w", err)
+	if err := s.DB(ctx).First(&r, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return r, errRefreshSessionNotFound
 		}
+		return r, fmt.Errorf("query refresh session: %w", err)
 	}
 
 	return r, nil
 }
 
-func (s *GormRefreshStore) Insert(ctx context.Context, refreshSession RefreshSession) (RefreshSession, error) {
-	start := time.Now()
-	if err := s.DB(ctx).Create(&refreshSession).Error; err != nil {
-		return RefreshSession{}, fmt.Errorf("create refresh session: %w", err)
+func (s *gormRefreshStore) Insert(ctx context.Context, r refreshSession) error {
+	if err := s.DB(ctx).Create(&r).Error; err != nil {
+		return fmt.Errorf("create refresh session: %w", err)
 	}
-	s.logger.Debug("insert refresh session", "elapsed", time.Since(start).String())
-
-	return refreshSession, nil
+	return nil
 }
 
-func (s *GormRefreshStore) Update(ctx context.Context, refreshSession RefreshSession) error {
-	// TODO change to Updates()
-	if err := s.DB(ctx).Save(&refreshSession).Error; err != nil {
-		return fmt.Errorf("save refresh session: %w", err)
+func (s *gormRefreshStore) MarkUsed(ctx context.Context, id uuid.UUID) error {
+	// conditional update so two concurrent refreshes can't both claim the same session
+	res := s.DB(ctx).Model(&refreshSession{}).Where("id = ? AND used = ?", id, false).Update("used", true)
+	if res.Error != nil {
+		return fmt.Errorf("mark refresh session used: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return errRefreshSessionUsed
 	}
 	return nil
 }

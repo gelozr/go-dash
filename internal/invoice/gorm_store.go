@@ -51,11 +51,11 @@ func toModel(i Invoice) invoiceModel {
 func toEntity(i invoiceModel) Invoice {
 	return Invoice{
 		ID:         i.ID,
-		CustomerID: &i.CustomerID.Val,
+		CustomerID: i.CustomerID.Ptr(),
 		Amount:     i.Amount,
 		Status:     i.Status,
 		Date:       i.Date,
-		IsActive:   &i.IsActive.Val,
+		IsActive:   i.IsActive.Ptr(),
 	}
 }
 
@@ -125,10 +125,12 @@ func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.P
 			CAST(invoices.date AS CHAR) LIKE @search OR
 			invoices.status LIKE @search
 		`, sql.Named("search", "%"+req.Text+"%")).
-		Order("invoices.date " + sort)
+		Order("invoices.date " + sort).
+		// gorm statements aren't safe to reuse after a finisher; a session clones per call
+		Session(&gorm.Session{})
 
 	var total int64
-	if err := q.Model(&Invoice{}).Count(&total).Error; err != nil {
+	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("count invoices: %w", err)
 	}
 
@@ -197,7 +199,7 @@ func (s *GormStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *GormStore) ListWithCustomerInfo(ctx context.Context, sort listing.SortOrder) ([]WithCustomerInfo, error) {
+func (s *GormStore) ListWithCustomerInfo(ctx context.Context, sort listing.SortOrder, limit int) ([]WithCustomerInfo, error) {
 	var out []WithCustomerInfo
 	var sortOrder string
 
@@ -218,6 +220,7 @@ func (s *GormStore) ListWithCustomerInfo(ctx context.Context, sort listing.SortO
 		`).
 		Joins("LEFT JOIN customers ON invoices.customer_id = customers.id").
 		Order("date " + sortOrder).
+		Limit(limit).
 		Find(&out).Error
 
 	if err != nil {

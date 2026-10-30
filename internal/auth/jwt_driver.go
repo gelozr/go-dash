@@ -6,178 +6,117 @@ import (
 	"fmt"
 	"time"
 
-	auth "github.com/gelozr/himo/auth2"
+	himoauth "github.com/gelozr/himo/auth"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/gelozr/go-dash/internal/config"
-	"github.com/gelozr/go-dash/internal/user"
+	"github.com/gelozr/go-dash/internal/db"
 )
 
-type AccessToken struct {
-	AccessToken  string
-	RefreshToken string
-	ExpiresIn    int
-}
-
-type AccessClaims struct {
-	Issuer    string
-	Subject   string
-	Audience  []string
-	ExpiresAt time.Time
-	NotBefore time.Time
-	IssuedAt  time.Time
-	ID        string
-
-	UserID uuid.UUID
-}
-
-type JWTClaims struct {
+type jwtClaims struct {
 	UserID uuid.UUID
 	jwt.RegisteredClaims
 }
 
-type JWTDriver struct {
-	hmacKey           []byte
-	refreshSessionSvc *Token
+// jwtTokens issues a short-lived JWT plus a single-use refresh token backed by a Refresh Session row.
+type jwtTokens struct {
+	hmacKey []byte
+	store   refreshStore
+	txm     db.TxManager
 }
 
-func NewJWTDriver(cfg *config.Config, refreshSessionSvc *Token) *JWTDriver {
-	return &JWTDriver{
-		hmacKey:           []byte(cfg.JWTHmacKey),
-		refreshSessionSvc: refreshSessionSvc,
+var _ himoauth.TokenProvider[uuid.UUID, AccessToken] = (*jwtTokens)(nil)
+
+func newJWTTokens(hmacKey []byte, store refreshStore, txm db.TxManager) *jwtTokens {
+	return &jwtTokens{hmacKey: hmacKey, store: store, txm: txm}
+}
+
+func (t *jwtTokens) Issue(ctx context.Context, uid uuid.UUID) (AccessToken, error) {
+	sess, err := t.newRefreshSession(ctx, uid)
+	if err != nil {
+		return AccessToken{}, err
 	}
+	return t.accessToken(sess)
 }
 
-func (d *JWTDriver) Sign(uid uuid.UUID) (string, time.Time, error) {
-	claims := JWTClaims{
-		UserID: uid,
+func (t *jwtTokens) Refresh(ctx context.Context, refreshToken string) (AccessToken, error) {
+	id, err := uuid.Parse(refreshToken)
+	if err != nil {
+		return AccessToken{}, fmt.Errorf("%w: malformed refresh token", himoauth.ErrInvalidToken)
+	}
+
+	var next refreshSession
+	// one transaction, so a failed insert doesn't leave the user with a used token and no new one
+	err = t.txm.Do(ctx, func(ctx context.Context) error {
+		curr, err := t.store.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		if curr.ExpiresAt.Before(time.Now()) {
+			return errRefreshSessionExpired
+		}
+		if err = t.store.MarkUsed(ctx, id); err != nil {
+			return err
+		}
+		next, err = t.newRefreshSession(ctx, curr.UserID)
+		return err
+	})
+	if err != nil {
+		return AccessToken{}, err
+	}
+
+	return t.accessToken(next)
+}
+
+func (t *jwtTokens) Verify(_ context.Context, bearer string) (uuid.UUID, error) {
+	tok, err := jwt.ParseWithClaims(bearer, &jwtClaims{}, func(*jwt.Token) (any, error) {
+		return t.hmacKey, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(jwtIssuer))
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return uuid.Nil, fmt.Errorf("%w: %w", himoauth.ErrTokenExpired, err)
+		}
+		// the key func never fails, so every other parse error is a bad token
+		return uuid.Nil, fmt.Errorf("%w: %w", himoauth.ErrInvalidToken, err)
+	}
+
+	return tok.Claims.(*jwtClaims).UserID, nil
+}
+
+func (t *jwtTokens) newRefreshSession(ctx context.Context, uid uuid.UUID) (refreshSession, error) {
+	now := time.Now()
+	sess := refreshSession{
+		ID:        uuid.New(),
+		UserID:    uid,
+		ExpiresAt: now.Add(refreshSessionTTL),
+		CreatedAt: now,
+	}
+	if err := t.store.Insert(ctx, sess); err != nil {
+		return refreshSession{}, fmt.Errorf("insert refresh session: %w", err)
+	}
+	return sess, nil
+}
+
+func (t *jwtTokens) accessToken(sess refreshSession) (AccessToken, error) {
+	now := time.Now()
+	claims := jwtClaims{
+		UserID: sess.UserID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
-			Issuer:    "myapp",
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			Issuer:    jwtIssuer,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(accessTokenTTL)),
 		},
 	}
 
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	signed, err := tok.SignedString(d.hmacKey)
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(t.hmacKey)
 	if err != nil {
-		return "", time.Now(), fmt.Errorf("signing token: %w", err)
+		return AccessToken{}, fmt.Errorf("sign jwt: %w", err)
 	}
 
-	exp, err := tok.Claims.GetExpirationTime()
-	if err != nil {
-		return "", time.Now(), fmt.Errorf("getting expiration time: %w", err)
-	}
-
-	return signed, exp.Time, nil
-}
-
-func (d *JWTDriver) Parse(tokenStr string) (AccessClaims, error) {
-	tok, err := jwt.ParseWithClaims(tokenStr, &JWTClaims{}, func(t *jwt.Token) (any, error) {
-		return d.hmacKey, nil
-	})
-
-	if err != nil {
-		switch {
-		case errors.Is(err, jwt.ErrTokenSignatureInvalid), errors.Is(err, jwt.ErrTokenMalformed):
-			return AccessClaims{}, ErrJWTInvalid
-		case errors.Is(err, jwt.ErrTokenExpired):
-			return AccessClaims{}, ErrJWTExpired
-		default:
-			return AccessClaims{}, fmt.Errorf("parsing token: %w", err)
-		}
-	}
-
-	ac := tok.Claims.(*JWTClaims)
-
-	claims := AccessClaims{
-		Issuer:    ac.Issuer,
-		Subject:   ac.Subject,
-		Audience:  ac.Audience,
-		ExpiresAt: ac.ExpiresAt.Time,
-		// NotBefore: ac.NotBefore.Time,
-		IssuedAt: ac.IssuedAt.Time,
-		ID:       ac.ID,
-		UserID:   ac.UserID,
-	}
-
-	return claims, nil
-}
-
-func (d *JWTDriver) IssueToken(ctx context.Context, usr any) (any, error) {
-	u, ok := usr.(*user.User)
-	if !ok {
-		return nil, errors.New("invalid user id")
-	}
-
-	jwtStr, exp, err := d.Sign(u.ID)
-	if err != nil {
-		return nil, fmt.Errorf("sign jwt: %w", err)
-	}
-
-	refreshSess, err := d.refreshSessionSvc.CreateRefresh(ctx, u.ID)
-	if err != nil {
-		return nil, fmt.Errorf("create refresh session: %w", err)
-	}
-
-	accessToken := AccessToken{
-		AccessToken:  jwtStr,
-		RefreshToken: refreshSess.ID.String(),
-		ExpiresIn:    int(time.Until(exp).Seconds()),
-	}
-
-	return accessToken, nil
-}
-
-func (d *JWTDriver) Login(ctx context.Context, user any) (any, error) {
-	return d.IssueToken(ctx, user)
-}
-
-func (d *JWTDriver) Validate(ctx context.Context, payload any) (auth.Verified[any], error) {
-	token, ok := payload.(string)
-	if !ok {
-		return auth.Verified[any]{}, errors.New("invalid jwt payload")
-	}
-
-	claims, err := d.Parse(token)
-	if err != nil {
-		return auth.Verified[any]{}, fmt.Errorf("parse token: %w", err)
-	}
-
-	return auth.Verified[any]{
-		User: user.User{ID: claims.UserID},
+	return AccessToken{
+		AccessToken:  signed,
+		RefreshToken: sess.ID.String(),
+		ExpiresIn:    int(accessTokenTTL.Seconds()),
 	}, nil
-}
-
-func (d *JWTDriver) RefreshToken(ctx context.Context, refreshToken string) (any, error) {
-	refreshTokenID, err := uuid.Parse(refreshToken)
-	if err != nil {
-		return nil, ErrRefreshTokenInvalid
-	}
-
-	currRefresh, err := d.refreshSessionSvc.GetRefresh(ctx, refreshTokenID)
-	if err != nil {
-		return nil, fmt.Errorf("get refresh session: %w", err)
-	}
-
-	newRefresh, err := d.refreshSessionSvc.ExchangeRefresh(ctx, currRefresh)
-	if err != nil {
-		return nil, fmt.Errorf("exchange refresh: %w", err)
-	}
-
-	jwtStr, exp, err := d.Sign(newRefresh.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("sign jwt: %w", err)
-	}
-
-	accessToken := AccessToken{
-		AccessToken:  jwtStr,
-		RefreshToken: newRefresh.ID.String(),
-		ExpiresIn:    int(time.Until(exp).Seconds()),
-	}
-
-	return accessToken, nil
 }

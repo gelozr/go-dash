@@ -70,7 +70,7 @@ func (h *CustomerHandler) Create(c fiber.Ctx) error {
 	var req request.CreateCustomer
 
 	if err := c.Bind().Body(&req); err != nil {
-		return fmt.Errorf("creaate customer bind request body: %w", err)
+		return fmt.Errorf("create customer bind request body: %w", err)
 	}
 
 	if err := h.validator.ValidateStruct(c.Context(), req); err != nil {

@@ -42,6 +42,8 @@ type Config struct {
 	MailUser          string `mapstructure:"MAIL_USER"`
 	MailPass          string `mapstructure:"MAIL_PASS"`
 	MailSkipTLSVerify bool   `mapstructure:"MAIL_SKIP_TLS_VERIFY"`
+	MailFromName      string `mapstructure:"MAIL_FROM_NAME"`
+	MailFromAddress   string `mapstructure:"MAIL_FROM_ADDRESS"`
 }
 
 func Load() (*Config, error) {
@@ -70,6 +72,11 @@ func Load() (*Config, error) {
 		cfg.AppEnv = Staging
 	default:
 		cfg.AppEnv = Local
+	}
+
+	// HS256 keys shorter than the 256-bit hash output are brute-forceable (RFC 7518 §3.2)
+	if len(cfg.JWTHmacKey) < 32 {
+		return nil, fmt.Errorf("JWT_HMAC_KEY must be at least 32 bytes")
 	}
 
 	// set app timezone
