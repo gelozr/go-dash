@@ -6,7 +6,7 @@ replace github.com/gelozr/himo => ../../projects/himo
 
 require (
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/gelozr/himo v0.0.0-20261025210308-e0cb36eb2e9f
+	github.com/gelozr/himo v0.0.0-20261030194938-c3b6165f7028
 	github.com/go-playground/locales v0.14.2
 	github.com/go-playground/universal-translator v0.18.2
 	github.com/go-playground/validator/v10 v10.30.5
