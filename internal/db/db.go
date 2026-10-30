@@ -21,7 +21,36 @@ type ctxKey string
 
 var dbTxKey = ctxKey("db_tx_key")
 
-func Open(cfg *config.Config, log logger.Logger) (*gorm.DB, error) {
+// DB is the only way stores reach the database, so the tx-from-context rule lives in one place.
+type DB struct {
+	gorm *gorm.DB
+}
+
+// Conn returns the transaction stored in ctx by Do, or the base handle, bound to ctx.
+// Don't run concurrent queries on a ctx that holds a transaction: it's a single connection.
+func (d *DB) Conn(ctx context.Context) *gorm.DB {
+	if tx, ok := ctx.Value(dbTxKey).(*gorm.DB); ok {
+		return tx.WithContext(ctx)
+	}
+	return d.gorm.WithContext(ctx)
+}
+
+// Do runs fn in a transaction. Inside another Do it joins the outer transaction through a savepoint.
+func (d *DB) Do(ctx context.Context, fn func(context.Context) error) error {
+	return d.Conn(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(context.WithValue(ctx, dbTxKey, tx))
+	})
+}
+
+func (d *DB) Close() error {
+	sqlDB, err := d.gorm.DB()
+	if err != nil {
+		return fmt.Errorf("get sql db: %w", err)
+	}
+	return sqlDB.Close()
+}
+
+func Open(cfg *config.Config, log logger.Logger) (*DB, error) {
 	wd, _ := os.Getwd()
 
 	logLevel := gormlogger.Warn
@@ -54,30 +83,12 @@ func Open(cfg *config.Config, log logger.Logger) (*gorm.DB, error) {
 		return nil, fmt.Errorf("extract db: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(10)
-	// sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	// sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
-	return db, nil
+	return &DB{gorm: db}, nil
 }
 
 type TxManager interface {
 	Do(context.Context, func(context.Context) error) error
-}
-
-type GormTxManager struct {
-	db *gorm.DB
-}
-
-func NewTxManager(db *gorm.DB) *GormTxManager {
-	return &GormTxManager{db: db}
-}
-
-func (g *GormTxManager) Do(ctx context.Context, fn func(context.Context) error) error {
-	return g.db.WithContext(ctx).
-		Transaction(func(tx *gorm.DB) error {
-			ctx = context.WithValue(ctx, dbTxKey, tx)
-			return fn(ctx)
-		})
 }
 
 type dbLogger struct {

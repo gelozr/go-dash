@@ -1,17 +1,11 @@
 package db
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
 	"gorm.io/gorm"
 )
-
-func FromCtx(ctx context.Context) (*gorm.DB, bool) {
-	db, ok := ctx.Value(dbTxKey).(*gorm.DB)
-	return db, ok
-}
 
 func RecordExists(q *gorm.DB) (bool, error) {
 	var hit int

@@ -20,30 +20,23 @@ type userModel struct {
 }
 
 type GormStore struct {
-	db     *gorm.DB
+	db     *db.DB
 	logger logger.Logger
 }
 
 var _ Store = (*GormStore)(nil)
 
-func NewStore(db *gorm.DB, log logger.Logger) *GormStore {
+func NewStore(db *db.DB, log logger.Logger) *GormStore {
 	return &GormStore{
 		db:     db,
 		logger: log.With("component", "store.gorm.user"),
 	}
 }
 
-func (s *GormStore) DB(ctx context.Context) *gorm.DB {
-	if gormDB, ok := db.FromCtx(ctx); ok {
-		return gormDB
-	}
-	return s.db
-}
-
 func (s *GormStore) FindByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
 
-	if err := s.DB(ctx).First(&u, "email = ?", email).Error; err != nil {
+	if err := s.db.Conn(ctx).First(&u, "email = ?", email).Error; err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			return nil, ErrUserNotFound

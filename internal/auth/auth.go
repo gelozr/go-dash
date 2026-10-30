@@ -5,7 +5,6 @@ import (
 
 	himoauth "github.com/gelozr/himo/auth"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	"github.com/gelozr/go-dash/internal/config"
 	"github.com/gelozr/go-dash/internal/db"
@@ -34,9 +33,9 @@ type PasswordCredentials struct {
 	Password string
 }
 
-func NewGuard(cfg *config.Config, users *user.Service, hash hashing.Manager, gdb *gorm.DB, txm db.TxManager) *Guard {
+func NewGuard(cfg *config.Config, users *user.Service, hash hashing.Manager, d *db.DB) *Guard {
 	return himoauth.NewTokenGuard(
 		newDBUserProvider(users, hash),
-		newJWTTokens([]byte(cfg.JWTHmacKey), &gormRefreshStore{db: gdb}, txm),
+		newJWTTokens([]byte(cfg.JWTHmacKey), &gormRefreshStore{db: d}, d),
 	)
 }

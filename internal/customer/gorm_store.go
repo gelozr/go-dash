@@ -52,32 +52,24 @@ func toEntity(c customerModel) Customer {
 }
 
 type GormStore struct {
-	db     *gorm.DB
+	db     *db.DB
 	logger logger.Logger
 }
 
 // compile‑time check
 var _ Store = (*GormStore)(nil)
 
-func NewStore(db *gorm.DB, log logger.Logger) *GormStore {
+func NewStore(db *db.DB, log logger.Logger) *GormStore {
 	return &GormStore{
 		db:     db,
 		logger: log.With("component", "store.gorm.customer"),
 	}
 }
 
-func (s *GormStore) DB(ctx context.Context) *gorm.DB {
-	if gormDB, ok := db.FromCtx(ctx); ok {
-		return gormDB.WithContext(ctx)
-	}
-
-	return s.db.WithContext(ctx)
-}
-
 func (s *GormStore) List(ctx context.Context) ([]Customer, error) {
 	var models []customerModel
 
-	if err := s.DB(ctx).Find(&models).Error; err != nil {
+	if err := s.db.Conn(ctx).Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("query customers: %w", err)
 	}
 
@@ -93,7 +85,7 @@ func (s *GormStore) List(ctx context.Context) ([]Customer, error) {
 func (s *GormStore) Find(ctx context.Context, id uuid.UUID) (*Customer, error) {
 	var model customerModel
 
-	if err := s.DB(ctx).First(&model, "id = ?", id).Error; err != nil {
+	if err := s.db.Conn(ctx).First(&model, "id = ?", id).Error; err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			return nil, ErrCustomerNotFound
@@ -107,7 +99,7 @@ func (s *GormStore) Find(ctx context.Context, id uuid.UUID) (*Customer, error) {
 }
 
 func (s *GormStore) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
-	tx := s.DB(ctx).Model(&customerModel{}).Where("id = ?", id)
+	tx := s.db.Conn(ctx).Model(&customerModel{}).Where("id = ?", id)
 
 	exists, err := db.RecordExists(tx)
 	if err != nil {
@@ -118,7 +110,7 @@ func (s *GormStore) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 func (s *GormStore) ExistsByEmail(ctx context.Context, email string) (bool, error) {
-	tx := s.DB(ctx).Model(&customerModel{}).Where("email = ?", email)
+	tx := s.db.Conn(ctx).Model(&customerModel{}).Where("email = ?", email)
 
 	exists, err := db.RecordExists(tx)
 	if err != nil {
@@ -131,7 +123,7 @@ func (s *GormStore) ExistsByEmail(ctx context.Context, email string) (bool, erro
 func (s *GormStore) Insert(ctx context.Context, c Customer) (*Customer, error) {
 	model := toModel(c)
 
-	if err := s.DB(ctx).Create(&model).Error; err != nil {
+	if err := s.db.Conn(ctx).Create(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return nil, ErrEmailAlreadyTaken
 		}
@@ -148,7 +140,7 @@ func (s *GormStore) SearchWithInvoiceInfo(ctx context.Context, search string) ([
 
 	start := time.Now()
 
-	err := s.DB(ctx).
+	err := s.db.Conn(ctx).
 		Model(&customerModel{}).
 		Select(`
             customers.id,

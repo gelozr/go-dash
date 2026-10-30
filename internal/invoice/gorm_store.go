@@ -68,24 +68,17 @@ func toEntities(m []invoiceModel) []Invoice {
 }
 
 type GormStore struct {
-	db     *gorm.DB
+	db     *db.DB
 	logger logger.Logger
 }
 
 var _ Store = (*GormStore)(nil)
 
-func NewStore(db *gorm.DB, logger logger.Logger) *GormStore {
+func NewStore(db *db.DB, logger logger.Logger) *GormStore {
 	return &GormStore{
 		db:     db,
 		logger: logger.With("component", "store.gorm.invoice"),
 	}
-}
-
-func (s *GormStore) DB(ctx context.Context) *gorm.DB {
-	if gormDB, ok := db.FromCtx(ctx); ok {
-		return gormDB.WithContext(ctx)
-	}
-	return s.db.WithContext(ctx)
 }
 
 func (s *GormStore) List(ctx context.Context, sort listing.SortOrder) ([]Invoice, error) {
@@ -99,7 +92,7 @@ func (s *GormStore) List(ctx context.Context, sort listing.SortOrder) ([]Invoice
 		sortOrder = "ASC"
 	}
 
-	if err := s.DB(ctx).Order("date " + sortOrder).Find(&models).Error; err != nil {
+	if err := s.db.Conn(ctx).Order("date " + sortOrder).Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("query invoices: %w", err)
 	}
 
@@ -115,7 +108,7 @@ func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.P
 		sort = "ASC"
 	}
 
-	q := s.DB(ctx).
+	q := s.db.Conn(ctx).
 		Model(&invoiceModel{}).
 		Joins("JOIN customers ON invoices.customer_id = customers.id").
 		Where(`
@@ -145,7 +138,7 @@ func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.P
 func (s *GormStore) Find(ctx context.Context, id uuid.UUID) (*Invoice, error) {
 	var i invoiceModel
 
-	if err := s.DB(ctx).First(&i, "id = ?", id).Error; err != nil {
+	if err := s.db.Conn(ctx).First(&i, "id = ?", id).Error; err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			return nil, ErrInvoiceNotFound
@@ -159,7 +152,7 @@ func (s *GormStore) Find(ctx context.Context, id uuid.UUID) (*Invoice, error) {
 }
 
 func (s *GormStore) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
-	tx := s.DB(ctx).Model(&invoiceModel{}).Where("id = ?", id)
+	tx := s.db.Conn(ctx).Model(&invoiceModel{}).Where("id = ?", id)
 
 	exists, err := db.RecordExists(tx)
 	if err != nil {
@@ -171,7 +164,7 @@ func (s *GormStore) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 func (s *GormStore) Insert(ctx context.Context, i Invoice) (*Invoice, error) {
 	invModel := toModel(i)
 
-	if err := s.DB(ctx).Create(&invModel).Error; err != nil {
+	if err := s.db.Conn(ctx).Create(&invModel).Error; err != nil {
 		return nil, fmt.Errorf("store invoice: %w", err)
 	}
 
@@ -180,7 +173,7 @@ func (s *GormStore) Insert(ctx context.Context, i Invoice) (*Invoice, error) {
 }
 
 func (s *GormStore) Update(ctx context.Context, id uuid.UUID, req UpdateInput) error {
-	err := s.DB(ctx).
+	err := s.db.Conn(ctx).
 		Model(&invoiceModel{}).
 		Where("id = ?", id).
 		Updates(req).Error
@@ -193,7 +186,7 @@ func (s *GormStore) Update(ctx context.Context, id uuid.UUID, req UpdateInput) e
 }
 
 func (s *GormStore) Delete(ctx context.Context, id uuid.UUID) error {
-	if err := s.DB(ctx).Delete(&invoiceModel{}, id).Error; err != nil {
+	if err := s.db.Conn(ctx).Delete(&invoiceModel{}, id).Error; err != nil {
 		return fmt.Errorf("delete invoice: %w", err)
 	}
 	return nil
@@ -210,7 +203,7 @@ func (s *GormStore) ListWithCustomerInfo(ctx context.Context, sort listing.SortO
 		sortOrder = "ASC"
 	}
 
-	err := s.DB(ctx).
+	err := s.db.Conn(ctx).
 		Model(&invoiceModel{}).
 		Select(`
 			invoices.*,

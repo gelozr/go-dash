@@ -1,10 +1,7 @@
 package bootstrap
 
 import (
-	"fmt"
-
 	"github.com/google/wire"
-	"gorm.io/gorm"
 
 	"github.com/gelozr/go-dash/internal/app"
 	"github.com/gelozr/go-dash/internal/auth"
@@ -35,8 +32,7 @@ var AppServiceProviders = wire.NewSet(
 
 	// DB
 	db.Open,
-	db.NewTxManager,
-	wire.Bind(new(db.TxManager), new(*db.GormTxManager)),
+	wire.Bind(new(db.TxManager), new(*db.DB)),
 
 	// EVENT
 	event.NewBroker,
@@ -95,16 +91,11 @@ var HTTPProviders = wire.NewSet(
 
 func AppProvider(
 	cfg *config.Config,
-	db *gorm.DB,
+	database *db.DB,
 	logger logger.Logger,
 	fiberServer *http.FiberServer,
 	_ registry.RegisterInitializer,
 	_ http.RouteInitializer,
-) (*App, error) {
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, fmt.Errorf("failed to sql db: %w", err)
-	}
-
-	return NewApp(cfg, sqlDB, logger, fiberServer), nil
+) *App {
+	return NewApp(cfg, database, logger, fiberServer)
 }

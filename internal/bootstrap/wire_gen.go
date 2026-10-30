@@ -35,39 +35,35 @@ func InitApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	gormDB, err := db.Open(configConfig, logger)
+	dbDB, err := db.Open(configConfig, logger)
 	if err != nil {
 		return nil, err
 	}
 	fiberServer := http.NewFiberServer(configConfig, logger)
 	broker := event.NewBroker()
-	gormStore := customer.NewStore(gormDB, logger)
+	gormStore := customer.NewStore(dbDB, logger)
 	service := customer.NewService(gormStore, broker, logger)
 	manager := mail.NewManager(configConfig)
 	registerInitializer := registry.RegisterAll(broker, service, manager, logger)
-	userGormStore := user.NewStore(gormDB, logger)
+	userGormStore := user.NewStore(dbDB, logger)
 	userService := user.NewService(userGormStore, logger)
 	hashingManager := hashing.NewManager(configConfig)
-	gormTxManager := db.NewTxManager(gormDB)
-	guard := auth.NewGuard(configConfig, userService, hashingManager, gormDB, gormTxManager)
+	guard := auth.NewGuard(configConfig, userService, hashingManager, dbDB)
 	validator, err := gp.New()
 	if err != nil {
 		return nil, err
 	}
 	authHandler := http.NewAuthHandler(guard, validator)
-	dashboardGormStore := dashboard.NewStore(gormDB, logger)
+	dashboardGormStore := dashboard.NewStore(dbDB, logger)
 	dashboardService := dashboard.NewService(dashboardGormStore, logger)
 	dashboardHandler := http.NewDashboardHandler(dashboardService, logger)
 	userHandler := http.NewUserHandler(userService, logger)
 	customerHandler := http.NewCustomerHandler(service, validator, logger)
-	invoiceGormStore := invoice.NewStore(gormDB, logger)
+	invoiceGormStore := invoice.NewStore(dbDB, logger)
 	invoiceService := invoice.NewService(invoiceGormStore, logger)
-	createInvoice := app.NewCreateInvoice(service, invoiceService, gormTxManager, logger)
+	createInvoice := app.NewCreateInvoice(service, invoiceService, dbDB, logger)
 	invoiceHandler := http.NewInvoiceHandler(invoiceService, createInvoice, validator, logger)
 	routeInitializer := http.SetupFiberRoutes(fiberServer, guard, authHandler, dashboardHandler, userHandler, customerHandler, invoiceHandler)
-	bootstrapApp, err := AppProvider(configConfig, gormDB, logger, fiberServer, registerInitializer, routeInitializer)
-	if err != nil {
-		return nil, err
-	}
+	bootstrapApp := AppProvider(configConfig, dbDB, logger, fiberServer, registerInitializer, routeInitializer)
 	return bootstrapApp, nil
 }
