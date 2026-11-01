@@ -19,11 +19,17 @@ type Server interface {
 	Shutdown(context.Context) error
 }
 
+// Waiter is anything shutdown must wait for after the server stops, e.g. async event handlers.
+type Waiter interface {
+	Wait(context.Context) error
+}
+
 type App struct {
 	cfg      *config.Config
 	dbCloser io.Closer
 	logger   logger.Logger
 	server   Server
+	events   Waiter
 }
 
 func NewApp(
@@ -31,12 +37,14 @@ func NewApp(
 	dbCloser io.Closer,
 	logger logger.Logger,
 	server Server,
+	events Waiter,
 ) *App {
 	return &App{
 		cfg:      cfg,
 		logger:   logger,
 		dbCloser: dbCloser,
 		server:   server,
+		events:   events,
 	}
 }
 
@@ -64,11 +72,15 @@ func (a *App) Run() error {
 		shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		// shutdown server
+		// server first, so no request can publish an event after we start waiting on handlers
+		var errs []error
 		if err := a.server.Shutdown(shutCtx); err != nil {
-			return fmt.Errorf("graceful shutdown failed, forcing close: %w", err)
+			errs = append(errs, fmt.Errorf("graceful shutdown failed, forcing close: %w", err))
 		}
-		return nil
+		if err := a.events.Wait(shutCtx); err != nil {
+			errs = append(errs, err)
+		}
+		return errors.Join(errs...)
 	}
 }
 

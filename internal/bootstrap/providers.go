@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	himoevent "github.com/gelozr/himo/event"
 	"github.com/google/wire"
 
 	"github.com/gelozr/go-dash/internal/auth"
@@ -8,7 +9,6 @@ import (
 	"github.com/gelozr/go-dash/internal/customer"
 	"github.com/gelozr/go-dash/internal/dashboard"
 	"github.com/gelozr/go-dash/internal/db"
-	"github.com/gelozr/go-dash/internal/event"
 	"github.com/gelozr/go-dash/internal/event/registry"
 	"github.com/gelozr/go-dash/internal/hashing"
 	"github.com/gelozr/go-dash/internal/http"
@@ -34,8 +34,8 @@ var AppServiceProviders = wire.NewSet(
 	wire.Bind(new(db.TxManager), new(*db.DB)),
 
 	// EVENT
-	event.NewBroker,
-	wire.Bind(new(event.Publisher), new(*event.Broker)),
+	himoevent.NewBroker,
+	wire.Bind(new(customer.Publisher), new(*himoevent.Broker)),
 	registry.RegisterAll,
 
 	// VALIDATOR
@@ -91,8 +91,8 @@ func AppProvider(
 	database *db.DB,
 	logger logger.Logger,
 	fiberServer *http.FiberServer,
-	_ registry.RegisterInitializer,
+	events *registry.Subscriptions,
 	_ http.RouteInitializer,
 ) *App {
-	return NewApp(cfg, database, logger, fiberServer)
+	return NewApp(cfg, database, logger, fiberServer, events)
 }

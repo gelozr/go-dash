@@ -62,7 +62,8 @@ func New(cfg *config.Config) (*Logger, error) {
 	h = &ctxHandler{base: h}
 
 	sloglogger := slog.New(h)
-	// slog.SetDefault(sloglogger) // optional global fallback
+	// libraries that log through slog's default (e.g. himo's async event handlers) end up in the app log
+	slog.SetDefault(sloglogger)
 
 	return &Logger{logger: sloglogger, closer: closer}, nil
 }

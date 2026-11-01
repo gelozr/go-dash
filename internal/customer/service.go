@@ -6,17 +6,21 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/gelozr/go-dash/internal/event"
 	"github.com/gelozr/go-dash/internal/logger"
 )
 
+// Publisher sends domain events such as Created.
+type Publisher interface {
+	Publish(ctx context.Context, event any) error
+}
+
 type Service struct {
 	store  Store
-	event  event.Publisher
+	event  Publisher
 	logger logger.Logger
 }
 
-func NewService(store Store, evt event.Publisher, log logger.Logger) *Service {
+func NewService(store Store, evt Publisher, log logger.Logger) *Service {
 	return &Service{
 		store:  store,
 		event:  evt,

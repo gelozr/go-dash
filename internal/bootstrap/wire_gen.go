@@ -12,7 +12,6 @@ import (
 	"github.com/gelozr/go-dash/internal/customer"
 	"github.com/gelozr/go-dash/internal/dashboard"
 	"github.com/gelozr/go-dash/internal/db"
-	"github.com/gelozr/go-dash/internal/event"
 	"github.com/gelozr/go-dash/internal/event/registry"
 	"github.com/gelozr/go-dash/internal/hashing"
 	"github.com/gelozr/go-dash/internal/http"
@@ -21,6 +20,7 @@ import (
 	"github.com/gelozr/go-dash/internal/logger/slog"
 	"github.com/gelozr/go-dash/internal/mail"
 	"github.com/gelozr/go-dash/internal/user"
+	himoevent "github.com/gelozr/himo/event"
 )
 
 // Injectors from wire.go:
@@ -39,11 +39,11 @@ func InitApp() (*App, error) {
 		return nil, err
 	}
 	fiberServer := http.NewFiberServer(configConfig, logger)
-	broker := event.NewBroker()
+	broker := himoevent.NewBroker()
 	gormStore := customer.NewStore(dbDB, logger)
 	service := customer.NewService(gormStore, broker, logger)
 	manager := mail.NewManager(configConfig)
-	registerInitializer := registry.RegisterAll(broker, service, manager, logger)
+	subscriptions := registry.RegisterAll(broker, service, manager)
 	userGormStore := user.NewStore(dbDB, logger)
 	userService := user.NewService(userGormStore, logger)
 	hashingManager := hashing.NewManager(configConfig)
@@ -62,6 +62,6 @@ func InitApp() (*App, error) {
 	invoiceService := invoice.NewService(invoiceGormStore, service, dbDB, logger)
 	invoiceHandler := http.NewInvoiceHandler(invoiceService, validator, logger)
 	routeInitializer := http.SetupFiberRoutes(fiberServer, guard, authHandler, dashboardHandler, userHandler, customerHandler, invoiceHandler)
-	bootstrapApp := AppProvider(configConfig, dbDB, logger, fiberServer, registerInitializer, routeInitializer)
+	bootstrapApp := AppProvider(configConfig, dbDB, logger, fiberServer, subscriptions, routeInitializer)
 	return bootstrapApp, nil
 }

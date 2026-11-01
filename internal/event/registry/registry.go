@@ -4,53 +4,44 @@ import (
 	"context"
 	"fmt"
 
+	himoevent "github.com/gelozr/himo/event"
+
 	"github.com/gelozr/go-dash/internal/customer"
-	"github.com/gelozr/go-dash/internal/event"
-	"github.com/gelozr/go-dash/internal/logger"
 	"github.com/gelozr/go-dash/internal/mail"
 )
 
-type RegisterInitializer struct{}
-
-func RegisterAll(
-	broker *event.Broker,
-	custSvc *customer.Service,
-	mailer mail.Mailer,
-	logger logger.Logger,
-) RegisterInitializer {
-	log := logger.With("component", "event/registry")
-
-	custCreatedBus := event.NewBus[customer.Created]()
-	{
-		_ = custCreatedBus.SetAsyncHandler(asyncHandler[customer.Created](log))
-
-		custCreatedBus.SubscribeAsync(SendWelcomeEmail(custSvc, mailer))
-
-		broker.RegisterBus(custCreatedBus)
-	}
-
-	return RegisterInitializer{}
+// Subscriptions holds the registered buses so shutdown can wait for their async handlers.
+type Subscriptions struct {
+	buses []interface{ Wait() }
 }
 
-func asyncHandler[T any](log logger.Logger) func(event.Handler[T]) event.Handler[T] {
-	return func(h event.Handler[T]) event.Handler[T] {
-		return func(ctx context.Context, e T) error {
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.ErrorContext(ctx, fmt.Sprintf("panic: %s", r))
-					}
-				}()
-				if err := h(ctx, e); err != nil {
-					log.ErrorContext(ctx, fmt.Sprintf("async handler error: %s", err.Error()))
-				}
-			}()
-			return nil
+func RegisterAll(broker *himoevent.Broker, custSvc *customer.Service, mailer mail.Mailer) *Subscriptions {
+	custCreated := himoevent.NewBus[customer.Created]()
+	custCreated.SubscribeAsync(SendWelcomeEmail(custSvc, mailer))
+	broker.RegisterBus(custCreated)
+
+	return &Subscriptions{buses: []interface{ Wait() }{custCreated}}
+}
+
+// Wait blocks until every async handler started so far has returned, or ctx is done.
+func (s *Subscriptions) Wait(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		for _, b := range s.buses {
+			b.Wait()
 		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("wait for event handlers: %w", ctx.Err())
 	}
 }
 
-func SendWelcomeEmail(custSvc *customer.Service, mailer mail.Mailer) event.Handler[customer.Created] {
+func SendWelcomeEmail(custSvc *customer.Service, mailer mail.Mailer) himoevent.Handler[customer.Created] {
 	return func(ctx context.Context, e customer.Created) error {
 		cust, err := custSvc.GetByID(ctx, e.ID)
 		if err != nil {
