@@ -81,24 +81,6 @@ func NewStore(db *db.DB, logger logger.Logger) *GormStore {
 	}
 }
 
-func (s *GormStore) List(ctx context.Context, sort listing.SortOrder) ([]Invoice, error) {
-	var models []invoiceModel
-	var sortOrder string
-
-	switch sort {
-	case listing.SortLatest:
-		sortOrder = "DESC"
-	default:
-		sortOrder = "ASC"
-	}
-
-	if err := s.db.Conn(ctx).Order("date " + sortOrder).Find(&models).Error; err != nil {
-		return nil, fmt.Errorf("query invoices: %w", err)
-	}
-
-	return toEntities(models), nil
-}
-
 func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.Page) ([]Invoice, int64, error) {
 	var sort string
 	switch req.Sort {

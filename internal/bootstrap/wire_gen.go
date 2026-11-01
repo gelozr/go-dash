@@ -7,7 +7,6 @@
 package bootstrap
 
 import (
-	"github.com/gelozr/go-dash/internal/app"
 	"github.com/gelozr/go-dash/internal/auth"
 	"github.com/gelozr/go-dash/internal/config"
 	"github.com/gelozr/go-dash/internal/customer"
@@ -60,10 +59,8 @@ func InitApp() (*App, error) {
 	userHandler := http.NewUserHandler(userService, logger)
 	customerHandler := http.NewCustomerHandler(service, validator, logger)
 	invoiceGormStore := invoice.NewStore(dbDB, logger)
-	invoiceService := invoice.NewService(invoiceGormStore, logger)
-	createInvoice := app.NewCreateInvoice(service, invoiceService, dbDB, logger)
-	updateInvoice := app.NewUpdateInvoice(service, invoiceService, dbDB)
-	invoiceHandler := http.NewInvoiceHandler(invoiceService, createInvoice, updateInvoice, validator, logger)
+	invoiceService := invoice.NewService(invoiceGormStore, service, dbDB, logger)
+	invoiceHandler := http.NewInvoiceHandler(invoiceService, validator, logger)
 	routeInitializer := http.SetupFiberRoutes(fiberServer, guard, authHandler, dashboardHandler, userHandler, customerHandler, invoiceHandler)
 	bootstrapApp := AppProvider(configConfig, dbDB, logger, fiberServer, registerInitializer, routeInitializer)
 	return bootstrapApp, nil

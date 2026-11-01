@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"github.com/google/wire"
 
-	"github.com/gelozr/go-dash/internal/app"
 	"github.com/gelozr/go-dash/internal/auth"
 	"github.com/gelozr/go-dash/internal/config"
 	"github.com/gelozr/go-dash/internal/customer"
@@ -69,10 +68,7 @@ var AppServiceProviders = wire.NewSet(
 	invoice.NewStore,
 	wire.Bind(new(invoice.Store), new(*invoice.GormStore)),
 	invoice.NewService,
-
-	// USE CASES
-	app.NewCreateInvoice,
-	app.NewUpdateInvoice,
+	wire.Bind(new(invoice.Customers), new(*customer.Service)),
 )
 
 var HTTPProviders = wire.NewSet(

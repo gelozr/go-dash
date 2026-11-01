@@ -8,7 +8,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 
-	"github.com/gelozr/go-dash/internal/app"
 	"github.com/gelozr/go-dash/internal/customer"
 	"github.com/gelozr/go-dash/internal/http/request"
 	"github.com/gelozr/go-dash/internal/http/response"
@@ -19,26 +18,20 @@ import (
 )
 
 type InvoiceHandler struct {
-	invSvc        *invoice.Service
-	createInvoice *app.CreateInvoice
-	updateInvoice *app.UpdateInvoice
-	validator     validation.Validator
-	logger        logger.Logger
+	invSvc    *invoice.Service
+	validator validation.Validator
+	logger    logger.Logger
 }
 
 func NewInvoiceHandler(
 	invSvc *invoice.Service,
-	createInvoice *app.CreateInvoice,
-	updateInvoice *app.UpdateInvoice,
 	validator validation.Validator,
 	logger logger.Logger,
 ) *InvoiceHandler {
 	return &InvoiceHandler{
-		invSvc:        invSvc,
-		createInvoice: createInvoice,
-		updateInvoice: updateInvoice,
-		validator:     validator,
-		logger:        logger.With("component", "http.invoice"),
+		invSvc:    invSvc,
+		validator: validator,
+		logger:    logger.With("component", "http.invoice"),
 	}
 }
 
@@ -113,7 +106,7 @@ func (h *InvoiceHandler) Create(c fiber.Ctx) error {
 		return fmt.Errorf("create invoice to dto: %w", err)
 	}
 
-	inv, err := h.createInvoice.Execute(c.Context(), reqInv)
+	inv, err := h.invSvc.Create(c.Context(), reqInv)
 	if err != nil {
 		switch {
 		case errors.Is(err, customer.ErrCustomerNotFound):
@@ -148,7 +141,7 @@ func (h *InvoiceHandler) Update(c fiber.Ctx) error {
 		return err
 	}
 
-	inv, err := h.updateInvoice.Execute(c.Context(), id, updateInput)
+	inv, err := h.invSvc.Update(c.Context(), id, updateInput)
 	if err != nil {
 		switch {
 		case errors.Is(err, invoice.ErrInvoiceNotFound):

@@ -14,7 +14,6 @@ import (
 var ErrInvoiceNotFound = errors.New("invoice not found")
 
 type Store interface {
-	List(context.Context, listing.SortOrder) ([]Invoice, error)
 	Search(context.Context, SearchFilter, listing.Page) ([]Invoice, int64, error)
 	Find(context.Context, uuid.UUID) (*Invoice, error)
 	Exists(context.Context, uuid.UUID) (bool, error)
