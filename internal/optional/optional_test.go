@@ -1,11 +1,33 @@
 package optional
 
 import (
+	"database/sql/driver"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+func TestOptionalValueConvertsSQLParameters(t *testing.T) {
+	id := uuid.MustParse("76bde1d8-d1a9-4fc5-8359-ae1f601846d3")
+	for _, tc := range []struct {
+		name  string
+		input driver.Valuer
+		want  driver.Value
+	}{
+		{"int", Of(42), int64(42)},
+		{"UUID", Of(id), id.String()},
+		{"null", FromPtr[int](nil), nil},
+		{"missing", Optional[bool]{}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := driver.DefaultParameterConverter.ConvertValue(tc.input)
+			if err != nil || got != tc.want {
+				t.Fatalf("SQL parameter = (%v, %v), want (%v, nil)", got, err, tc.want)
+			}
+		})
+	}
+}
 
 func TestStringToUUIDWithDefinedString(t *testing.T) {
 	type uuidString string
