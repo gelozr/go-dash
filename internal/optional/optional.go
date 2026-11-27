@@ -47,22 +47,7 @@ func (o Optional[T]) Value() (driver.Value, error) {
 		return nil, nil
 	}
 
-	v := any(o.Val)
-
-	if u, ok := v.(driver.Valuer); ok {
-		return u.Value()
-	}
-
-	if dv, ok := v.(driver.Value); ok {
-		return dv, nil
-	}
-
-	switch tv := v.(type) {
-	case int64, float64, bool, string, []byte:
-		return tv, nil
-	default:
-		return nil, fmt.Errorf("optional: unsupported type %T for driver.Value", o.Val)
-	}
+	return driver.DefaultParameterConverter.ConvertValue(o.Val)
 }
 
 // Scan implements sql.Scanner for database reads.
