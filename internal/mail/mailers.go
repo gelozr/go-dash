@@ -119,7 +119,6 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 		host = host[1 : len(host)-1]
 	}
 	addr := net.JoinHostPort(host, strconv.Itoa(s.Port))
-	auth := smtp.PlainAuth("", s.Username, s.Password, host)
 	tlsCfg := &tls.Config{
 		ServerName:         host,
 		InsecureSkipVerify: s.SkipTLSVerify,
@@ -161,8 +160,11 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 			}
 		}
 	}
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("client auth: %w", err)
+	if s.Username != "" || s.Password != "" {
+		auth := smtp.PlainAuth("", s.Username, s.Password, host)
+		if err := client.Auth(auth); err != nil {
+			return fmt.Errorf("client auth: %w", err)
+		}
 	}
 	if err := client.Mail(m.From.Address); err != nil {
 		return fmt.Errorf("client mail: %w", err)

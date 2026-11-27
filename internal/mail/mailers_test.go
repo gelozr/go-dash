@@ -6,11 +6,73 @@ import (
 	"io"
 	"mime/multipart"
 	"net"
+	"net/textproto"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 )
+
+func TestSMTPSendsWithoutCredentials(t *testing.T) {
+	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	if err := listener.SetDeadline(deadline); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
+	defer cancel()
+	mailer := &SMTPMailer{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port}
+	done := make(chan error, 1)
+	go func() {
+		done <- mailer.Send(ctx, &Message{
+			From: Address{Address: "sender@example.com"},
+			To:   []Address{{Address: "recipient@example.com"}},
+			Text: "hello",
+		})
+	}()
+
+	conn, err := listener.AcceptTCP()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(deadline); err != nil {
+		t.Fatal(err)
+	}
+	relay := textproto.NewConn(conn)
+	for _, step := range []struct {
+		reply   string
+		command string
+	}{
+		{"220 localhost", "EHLO localhost"},
+		{"250 localhost", "MAIL FROM:<sender@example.com>"},
+		{"250 sender accepted", "RCPT TO:<recipient@example.com>"},
+		{"250 recipient accepted", "DATA"},
+		{"354 send message", ""},
+		{"250 message accepted", "QUIT"},
+		{"221 goodbye", ""},
+	} {
+		if err := relay.PrintfLine("%s", step.reply); err != nil {
+			t.Fatal(err)
+		}
+		if step.command != "" {
+			if got, err := relay.ReadLine(); err != nil || got != step.command {
+				t.Fatalf("SMTP command = %q, want %q (read error %v)", got, step.command, err)
+			}
+		} else if strings.HasPrefix(step.reply, "354") {
+			if _, err := relay.ReadDotBytes(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestSMTPSubjectEncoding(t *testing.T) {
 	for _, tc := range []struct {
