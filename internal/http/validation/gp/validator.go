@@ -119,7 +119,7 @@ func (g *Validator) buildErrors(ctx context.Context, err error) error {
 		}
 	}
 
-	return nil
+	return err
 }
 
 func registerOptionalType[T any](validator *validator.Validate) {

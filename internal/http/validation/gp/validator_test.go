@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/gelozr/go-dash/internal/http"
@@ -14,6 +15,20 @@ import (
 	"github.com/gelozr/go-dash/internal/http/response"
 	"github.com/gelozr/go-dash/internal/http/validation"
 )
+
+func TestValidateStructRejectsInvalidInput(t *testing.T) {
+	v, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, input := range []any{nil, (*request.CreateInvoice)(nil), "invoice"} {
+		var invalid *validator.InvalidValidationError
+		if err := v.ValidateStruct(t.Context(), input); !errors.As(err, &invalid) {
+			t.Errorf("ValidateStruct(%T) = %v, want invalid validation error", input, err)
+		}
+	}
+}
 
 func TestInvoiceStatusMustBeKnown(t *testing.T) {
 	v, err := New()
