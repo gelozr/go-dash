@@ -1,6 +1,10 @@
 package listing
 
-import "gorm.io/gorm"
+import (
+	"math"
+
+	"gorm.io/gorm"
+)
 
 type SortOrder int
 
@@ -33,9 +37,11 @@ func NewPage(page int, size int) Page {
 }
 
 func (p Page) Scope() func(db *gorm.DB) *gorm.DB {
-	offset := (p.Page - 1) * p.Size
-
 	return func(db *gorm.DB) *gorm.DB {
+		if p.Size > 0 && p.Page-1 > math.MaxInt/p.Size {
+			return db.Limit(0)
+		}
+		offset := (p.Page - 1) * p.Size
 		return db.Offset(offset).Limit(p.Size)
 	}
 }
@@ -57,7 +63,7 @@ func NewResult[T any](items []T, p Page, total int64) Result[T] {
 		Total:   total,
 		Page:    p.Page,
 		PerPage: p.Size,
-		HasNext: int64(p.Page*p.Size) < total,
+		HasNext: p.Size > 0 && total > 0 && int64(p.Page) <= (total-1)/int64(p.Size),
 		HasPrev: p.Page > 1,
 	}
 }
