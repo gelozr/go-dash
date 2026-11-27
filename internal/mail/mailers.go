@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"mime"
 	"mime/quotedprintable"
 	"net"
 	"net/mail"
@@ -61,7 +62,7 @@ func (s *SMTPMailer) buildTo(sb *strings.Builder, m *Message) {
 }
 
 func (s *SMTPMailer) buildSubject(sb *strings.Builder, m *Message) {
-	sb.WriteString("Subject: " + m.Subject + "\r\n")
+	sb.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", m.Subject) + "\r\n")
 }
 
 func (s *SMTPMailer) buildBody(sb *strings.Builder, m *Message, boundary string) error {
