@@ -163,12 +163,9 @@ func StringToUUID[T ~string | ~*string](o Optional[T]) (Optional[uuid.UUID], err
 		return Optional[uuid.UUID]{IsPresent: true, IsNull: true}, nil
 	}
 
-	var str string
-	switch v := any(o.Val).(type) {
-	case string:
-		str = v
-	case *string:
-		str = *v
+	str, err := stringValue(o.Val)
+	if err != nil {
+		return Optional[uuid.UUID]{}, err
 	}
 
 	u, err := uuid.Parse(str)
@@ -186,12 +183,9 @@ func StringToTime[T ~string | ~*string](o Optional[T], layout string) (Optional[
 		return Optional[time.Time]{IsPresent: true, IsNull: true}, nil
 	}
 
-	var str string
-	switch v := any(o.Val).(type) {
-	case string:
-		str = v
-	case *string:
-		str = *v
+	str, err := stringValue(o.Val)
+	if err != nil {
+		return Optional[time.Time]{}, err
 	}
 
 	t, err := time.Parse(layout, str)
@@ -200,4 +194,12 @@ func StringToTime[T ~string | ~*string](o Optional[T], layout string) (Optional[
 	}
 
 	return Optional[time.Time]{Val: t, IsPresent: true}, nil
+}
+
+func stringValue[T ~string | ~*string](v T) (string, error) {
+	value := reflect.Indirect(reflect.ValueOf(v))
+	if !value.IsValid() {
+		return "", fmt.Errorf("cannot parse nil string pointer")
+	}
+	return value.String(), nil
 }
