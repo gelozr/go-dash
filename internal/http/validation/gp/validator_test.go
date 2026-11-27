@@ -51,6 +51,28 @@ func TestInvoiceStatusMustBeKnown(t *testing.T) {
 	}
 }
 
+func TestCreateInvoiceRejectsNegativeAmount(t *testing.T) {
+	v, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := request.CreateInvoice{
+		CustomerID: "bc2dbfcc-b2ba-4dac-8f41-5bea194e2d20",
+		Amount:     -0.01,
+		Status:     "pending",
+		Date:       "2026-10-31T00:00:00Z",
+	}
+	var errs validation.Errors
+	if err := v.ValidateStruct(t.Context(), req); !errors.As(err, &errs) || len(errs["amount"]) == 0 {
+		t.Fatalf("validation error = %v, want an error for amount", err)
+	}
+
+	req.Amount = 0.01
+	if err := v.ValidateStruct(t.Context(), req); err != nil {
+		t.Fatalf("positive amount rejected: %v", err)
+	}
+}
+
 func TestInvoiceDateValidationUsesRequestLocale(t *testing.T) {
 	v, err := New()
 	if err != nil {
