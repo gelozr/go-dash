@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,15 +55,7 @@ func Open(cfg *config.Config, log logger.Logger) (*DB, error) {
 	logLevel := gormlogger.Warn
 	l := &dbLogger{Logger: log, level: logLevel, basePath: wd}
 
-	dns := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		cfg.DBUser,
-		url.QueryEscape(cfg.DBPass),
-		cfg.DBHost,
-		cfg.DBPort,
-		cfg.DBName,
-	)
-
-	db, err := gorm.Open(mysql.Open(dns), &gorm.Config{
+	db, err := gorm.Open(mysql.Open(mysqlDSN(cfg)), &gorm.Config{
 		TranslateError: true,
 		Logger: gormlogger.New(l, gormlogger.Config{
 			SlowThreshold:             time.Second,
@@ -85,6 +76,16 @@ func Open(cfg *config.Config, log logger.Logger) (*DB, error) {
 	sqlDB.SetMaxOpenConns(10)
 
 	return &DB{gorm: db}, nil
+}
+
+func mysqlDSN(cfg *config.Config) string {
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		cfg.DBUser,
+		cfg.DBPass,
+		cfg.DBHost,
+		cfg.DBPort,
+		cfg.DBName,
+	)
 }
 
 type TxManager interface {

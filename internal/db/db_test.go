@@ -4,8 +4,11 @@ import (
 	"context"
 	"testing"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+
+	"github.com/gelozr/go-dash/internal/config"
 )
 
 // openLazy returns a handle that never connects, so Conn can be tested without MySQL.
@@ -35,5 +38,23 @@ func TestConn(t *testing.T) {
 	got = d.Conn(txCtx)
 	if got.Statement.ConnPool != tx.ConnPool || got.Statement.Context != txCtx {
 		t.Error("with a transaction in ctx, Conn should return it bound to ctx")
+	}
+}
+
+func TestMySQLDSNPreservesPassword(t *testing.T) {
+	cfg := &config.Config{
+		DBUser: "user",
+		DBPass: "a b+c@d%e:/?",
+		DBHost: "localhost",
+		DBPort: 3306,
+		DBName: "go_dash",
+	}
+
+	parsed, err := mysqldriver.ParseDSN(mysqlDSN(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Passwd != cfg.DBPass {
+		t.Error("parsed password does not match the configured password")
 	}
 }
