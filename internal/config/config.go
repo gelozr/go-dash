@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"time"
 
 	"github.com/spf13/viper"
@@ -51,12 +53,8 @@ func Load() (*Config, error) {
 	v := viper.NewWithOptions(viper.ExperimentalBindStruct())
 	v.SetConfigFile(".env")
 	v.SetConfigType("env")
-	if err := v.ReadInConfig(); err != nil {
+	if err := v.ReadInConfig(); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("reading .env: %w", err)
-	}
-
-	if len(v.AllKeys()) == 0 {
-		return nil, fmt.Errorf("no .env variables found")
 	}
 
 	// allow real ENV to override

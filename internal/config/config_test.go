@@ -29,3 +29,35 @@ func TestLoad_EnvOverridesAndFillsMissingKeys(t *testing.T) {
 		t.Errorf("JWTHmacKey not read from .env")
 	}
 }
+
+func TestLoad_EnvironmentOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		createDotenv bool
+	}{
+		{name: "missing .env"},
+		{name: "empty .env", createDotenv: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			if tc.createDotenv {
+				if err := os.WriteFile(".env", nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("APP_ENV", "production")
+			t.Setenv("APP_PORT", "9000")
+			t.Setenv("APP_TIMEZONE", "UTC")
+			t.Setenv("JWT_HMAC_KEY", "0123456789abcdef0123456789abcdef")
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.AppEnv != Production || cfg.AppPort != "9000" || cfg.AppTimezone != "UTC" {
+				t.Errorf("AppEnv = %d, AppPort = %q, AppTimezone = %q, want production, 9000, UTC",
+					cfg.AppEnv, cfg.AppPort, cfg.AppTimezone)
+			}
+		})
+	}
+}
