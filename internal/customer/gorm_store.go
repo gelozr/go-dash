@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,8 @@ import (
 	"github.com/gelozr/go-dash/internal/db"
 	"github.com/gelozr/go-dash/internal/logger"
 )
+
+var searchPatternEscaper = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_")
 
 type customerModel struct {
 	ID       uuid.UUID `gorm:"type:char(36);not nullable;unique;primary_key"`
@@ -139,6 +142,7 @@ func (s *GormStore) SearchWithInvoiceInfo(ctx context.Context, search string) ([
 	var out []WithInvoiceInfo
 
 	start := time.Now()
+	pattern := "%" + searchPatternEscaper.Replace(search) + "%"
 
 	err := s.db.Conn(ctx).
 		Model(&customerModel{}).
@@ -152,7 +156,7 @@ func (s *GormStore) SearchWithInvoiceInfo(ctx context.Context, search string) ([
             SUM(CASE WHEN invoices.status = 'paid'    THEN invoices.amount ELSE 0 END) AS total_paid
         `).
 		Joins("LEFT JOIN invoices ON customers.id = invoices.customer_id").
-		Where("customers.name LIKE @s OR customers.email LIKE @s", sql.Named("s", "%"+search+"%")).
+		Where("customers.name LIKE @s ESCAPE '!' OR customers.email LIKE @s ESCAPE '!'", sql.Named("s", pattern)).
 		Group("customers.id, customers.name, customers.email, customers.image_url").
 		Order("customers.name").
 		Scan(&out).Error
