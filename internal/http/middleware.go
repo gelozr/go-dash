@@ -35,14 +35,19 @@ var (
 )
 
 func AuthMiddleware(g *auth.Guard) fiber.Handler {
+	const bearerChallenge = `Bearer realm="go-dash"`
+	const invalidTokenChallenge = bearerChallenge + `, error="invalid_token"`
+
 	return func(c fiber.Ctx) error {
 		header := c.Get("Authorization")
 		if header == "" {
+			c.Set(fiber.HeaderWWWAuthenticate, bearerChallenge)
 			return fiber.NewError(http.StatusUnauthorized, "missing authorization header")
 		}
 		scheme, token, _ := strings.Cut(header, " ")
 		token = strings.TrimLeft(token, " ")
 		if !strings.EqualFold(scheme, "Bearer") || token == "" {
+			c.Set(fiber.HeaderWWWAuthenticate, bearerChallenge)
 			return fiber.NewError(http.StatusUnauthorized, "invalid token")
 		}
 
@@ -50,8 +55,10 @@ func AuthMiddleware(g *auth.Guard) fiber.Handler {
 		if err != nil {
 			switch {
 			case errors.Is(err, himoauth.ErrTokenExpired):
+				c.Set(fiber.HeaderWWWAuthenticate, invalidTokenChallenge)
 				return fiber.NewError(http.StatusUnauthorized, "expired token")
 			case errors.Is(err, himoauth.ErrInvalidToken):
+				c.Set(fiber.HeaderWWWAuthenticate, invalidTokenChallenge)
 				return fiber.NewError(http.StatusUnauthorized, "invalid token")
 			default:
 				return fmt.Errorf("verify token: %w", err)
