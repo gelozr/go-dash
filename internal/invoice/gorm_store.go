@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,8 @@ import (
 	"github.com/gelozr/go-dash/internal/logger"
 	"github.com/gelozr/go-dash/internal/optional"
 )
+
+var searchPatternEscaper = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_")
 
 type invoiceModel struct {
 	ID         uuid.UUID
@@ -90,16 +93,17 @@ func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.P
 		sort = "ASC"
 	}
 
+	pattern := "%" + searchPatternEscaper.Replace(req.Text) + "%"
 	q := s.db.Conn(ctx).
 		Model(&invoiceModel{}).
 		Joins("LEFT JOIN customers ON invoices.customer_id = customers.id").
 		Where(`
-			customers.name LIKE @search OR
-			customers.email LIKE @search OR
-			CAST(invoices.amount AS CHAR) LIKE @search OR
-			CAST(invoices.date AS CHAR) LIKE @search OR
-			invoices.status LIKE @search
-		`, sql.Named("search", "%"+req.Text+"%")).
+			customers.name LIKE @search ESCAPE '!' OR
+			customers.email LIKE @search ESCAPE '!' OR
+			CAST(invoices.amount AS CHAR) LIKE @search ESCAPE '!' OR
+			CAST(invoices.date AS CHAR) LIKE @search ESCAPE '!' OR
+			invoices.status LIKE @search ESCAPE '!'
+		`, sql.Named("search", pattern)).
 		Order("invoices.date " + sort + ", invoices.id " + sort).
 		// gorm statements aren't safe to reuse after a finisher; a session clones per call
 		Session(&gorm.Session{})
