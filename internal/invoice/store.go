@@ -31,7 +31,7 @@ type SearchFilter struct {
 
 type UpdateInput struct {
 	CustomerID optional.Optional[uuid.UUID]
-	Amount     float64
+	Amount     *float64
 	Status     string
 	Date       optional.Optional[time.Time]
 	IsActive   optional.Optional[bool]
