@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"time"
 
 	himoevent "github.com/gelozr/himo/event"
 
@@ -43,6 +44,9 @@ func (s *Subscriptions) Wait(ctx context.Context) error {
 
 func SendWelcomeEmail(custSvc *customer.Service, mailer mail.Mailer) himoevent.Handler[customer.Created] {
 	return func(ctx context.Context, e customer.Created) error {
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+
 		cust, err := custSvc.GetByID(ctx, e.ID)
 		if err != nil {
 			return fmt.Errorf("SendWelcomeEmail: get customer by id: %w", err)
