@@ -92,7 +92,7 @@ func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.P
 
 	q := s.db.Conn(ctx).
 		Model(&invoiceModel{}).
-		Joins("JOIN customers ON invoices.customer_id = customers.id").
+		Joins("LEFT JOIN customers ON invoices.customer_id = customers.id").
 		Where(`
 			customers.name LIKE @search OR
 			customers.email LIKE @search OR
