@@ -38,12 +38,17 @@ func testSMTPSendsWithoutCredentials(t *testing.T, quitReply string) {
 	ctx, cancel := context.WithDeadline(t.Context(), deadline)
 	defer cancel()
 	mailer := &SMTPMailer{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port}
+	headers := map[string]string{
+		"x-invoice-id": "123",
+		"Reply-To":     "billing@example.com",
+	}
 	done := make(chan error, 1)
 	go func() {
 		done <- mailer.Send(ctx, &Message{
-			From: Address{Address: "sender@example.com"},
-			To:   []Address{{Address: "recipient@example.com"}},
-			Text: "hello",
+			From:    Address{Address: "sender@example.com"},
+			To:      []Address{{Address: "recipient@example.com"}},
+			Text:    "hello",
+			Headers: headers,
 		})
 	}()
 
@@ -76,13 +81,46 @@ func testSMTPSendsWithoutCredentials(t *testing.T, quitReply string) {
 				t.Fatalf("SMTP command = %q, want %q (read error %v)", got, step.command, err)
 			}
 		} else if strings.HasPrefix(step.reply, "354") {
-			if _, err := relay.ReadDotBytes(); err != nil {
+			data, err := relay.ReadDotBytes()
+			if err != nil {
 				t.Fatal(err)
+			}
+			msg, err := mail.ReadMessage(strings.NewReader(string(data)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, want := range headers {
+				if got := msg.Header.Get(name); got != want {
+					t.Errorf("%s header = %q, want %q", name, got, want)
+				}
 			}
 		}
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSMTPRejectsInvalidCustomHeadersBeforeDial(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		headers map[string]string
+	}{
+		{"invalid name", map[string]string{"X Empty": "value"}},
+		{"invalid value", map[string]string{"X-Id": "multiple\nlines"}},
+		{"reserved name", map[string]string{"Content-Transfer-Encoding": "base64"}},
+		{"duplicate name", map[string]string{"X-Id": "one", "x-id": "two"}},
+		{"long line", map[string]string{"X-Id": strings.Repeat("x", 993)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			mailer := &SMTPMailer{}
+			err := mailer.Send(ctx, &Message{Headers: tc.headers})
+			if err == nil || !strings.Contains(err.Error(), "custom header") {
+				t.Fatalf("send error = %v, want a custom header error before dialing", err)
+			}
+		})
 	}
 }
 
