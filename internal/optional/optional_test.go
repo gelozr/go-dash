@@ -2,11 +2,39 @@ package optional
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+func TestOptionalJSONMarshal(t *testing.T) {
+	present := Of(false)
+	missing := Optional[bool]{}
+	explicitNull := FromPtr[bool](nil)
+	for _, tc := range []struct {
+		name  string
+		input any
+		want  string
+	}{
+		{"present value", present, `false`},
+		{"present pointer", &present, `false`},
+		{"missing value", missing, `null`},
+		{"missing pointer", &missing, `null`},
+		{"explicit null value", explicitNull, `null`},
+		{"explicit null pointer", &explicitNull, `null`},
+		{"nil pointer", (*Optional[bool])(nil), `null`},
+		{"map value", map[string]Optional[bool]{"active": present}, `{"active":false}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := json.Marshal(tc.input)
+			if err != nil || string(got) != tc.want {
+				t.Fatalf("json.Marshal() = %s, %v; want %s, nil", got, err, tc.want)
+			}
+		})
+	}
+}
 
 func TestOptionalValueConvertsSQLParameters(t *testing.T) {
 	id := uuid.MustParse("76bde1d8-d1a9-4fc5-8359-ae1f601846d3")

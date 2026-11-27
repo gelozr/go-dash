@@ -34,7 +34,7 @@ func (o *Optional[T]) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON emits either "null" (missing or null) or the JSON of Val.
-func (o *Optional[T]) MarshalJSON() ([]byte, error) {
+func (o Optional[T]) MarshalJSON() ([]byte, error) {
 	if !o.IsPresent || o.IsNull {
 		return []byte("null"), nil
 	}
