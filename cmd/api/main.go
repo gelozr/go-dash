@@ -10,14 +10,16 @@ import (
 )
 
 func main() {
+	fatalLog := log.New(os.Stderr, "", log.LstdFlags)
+
 	// init app
 	app, err := bootstrap.InitApp()
 	if err != nil {
-		log.Fatalf("failed to initialize app %v", err)
+		fatalLog.Fatalf("failed to initialize app %v", err)
 	}
 	defer func() {
 		if err = app.Close(); err != nil {
-			log.Fatalf("failed to clean up %v", err)
+			fatalLog.Fatalf("failed to clean up %v", err)
 		}
 	}()
 
