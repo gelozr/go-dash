@@ -137,16 +137,5 @@ func (s *Service) customerMustExist(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	exists, err := s.Exists(ctx, id)
-	if err != nil {
-		return fmt.Errorf("exists invoice: %w", err)
-	}
-	if !exists {
-		return ErrInvoiceNotFound
-	}
-
-	if err = s.store.Delete(ctx, id); err != nil {
-		return fmt.Errorf("delete invoice: %w", err)
-	}
-	return nil
+	return s.store.Delete(ctx, id)
 }

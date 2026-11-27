@@ -168,8 +168,12 @@ func (s *GormStore) Update(ctx context.Context, id uuid.UUID, req UpdateInput) e
 }
 
 func (s *GormStore) Delete(ctx context.Context, id uuid.UUID) error {
-	if err := s.db.Conn(ctx).Delete(&invoiceModel{}, id).Error; err != nil {
-		return fmt.Errorf("delete invoice: %w", err)
+	result := s.db.Conn(ctx).Delete(&invoiceModel{}, "id = ?", id)
+	if result.Error != nil {
+		return fmt.Errorf("delete invoice: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrInvoiceNotFound
 	}
 	return nil
 }
