@@ -194,7 +194,7 @@ func (s *GormStore) ListWithCustomerInfo(ctx context.Context, sort listing.SortO
 			customers.image_url as customer_image_url
 		`).
 		Joins("LEFT JOIN customers ON invoices.customer_id = customers.id").
-		Order("date " + sortOrder).
+		Order("invoices.date " + sortOrder + ", invoices.id " + sortOrder).
 		Limit(limit).
 		Find(&out).Error
 
