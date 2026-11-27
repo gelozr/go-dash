@@ -58,3 +58,20 @@ func TestMySQLDSNPreservesPassword(t *testing.T) {
 		t.Error("parsed password does not match the configured password")
 	}
 }
+
+func TestMySQLDSNPreservesDatabaseName(t *testing.T) {
+	cfg := &config.Config{
+		DBUser: "user",
+		DBHost: "localhost",
+		DBPort: 3306,
+		DBName: "go?dash%25",
+	}
+
+	parsed, err := mysqldriver.ParseDSN(mysqlDSN(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.DBName != cfg.DBName {
+		t.Errorf("parsed database name = %q, want %q", parsed.DBName, cfg.DBName)
+	}
+}
