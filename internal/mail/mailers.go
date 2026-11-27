@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
 	"strings"
@@ -61,24 +62,31 @@ func (s *SMTPMailer) buildSubject(sb *strings.Builder, m *Message) {
 	sb.WriteString("Subject: " + m.Subject + "\r\n")
 }
 
-func (s *SMTPMailer) buildBody(sb *strings.Builder, m *Message, boundary string) {
-	// Plain text part
-	if m.Text != "" {
-		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-		sb.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
-		sb.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
-		sb.WriteString("Content-Disposition: inline\r\n\r\n")
-		sb.WriteString(m.Text + "\r\n\r\n")
-	}
+func (s *SMTPMailer) buildBody(sb *strings.Builder, m *Message, boundary string) error {
+	for _, part := range []struct {
+		contentType string
+		body        string
+	}{
+		{"text/plain", m.Text},
+		{"text/html", m.HTML},
+	} {
+		if part.body == "" {
+			continue
+		}
 
-	// HTML part
-	if m.HTML != "" {
-		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-		sb.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n")
+		fmt.Fprintf(sb, "--%s\r\nContent-Type: %s; charset=\"UTF-8\"\r\n", boundary, part.contentType)
 		sb.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
 		sb.WriteString("Content-Disposition: inline\r\n\r\n")
-		sb.WriteString(m.HTML + "\r\n\r\n")
+		w := quotedprintable.NewWriter(sb)
+		if _, err := w.Write([]byte(part.body)); err != nil {
+			return err
+		}
+		if err := w.Close(); err != nil {
+			return err
+		}
+		sb.WriteString("\r\n")
 	}
+	return nil
 }
 
 func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
@@ -96,7 +104,9 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
 	sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%s\r\n", boundary))
 	sb.WriteString("\r\n") // end of headers
 
-	s.buildBody(&sb, m, boundary)
+	if err := s.buildBody(&sb, m, boundary); err != nil {
+		return fmt.Errorf("encode message body: %w", err)
+	}
 
 	// closing boundary
 	sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
