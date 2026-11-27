@@ -100,7 +100,7 @@ func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.P
 			CAST(invoices.date AS CHAR) LIKE @search OR
 			invoices.status LIKE @search
 		`, sql.Named("search", "%"+req.Text+"%")).
-		Order("invoices.date " + sort).
+		Order("invoices.date " + sort + ", invoices.id " + sort).
 		// gorm statements aren't safe to reuse after a finisher; a session clones per call
 		Session(&gorm.Session{})
 
