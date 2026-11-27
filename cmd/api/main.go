@@ -10,6 +10,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	fatalLog := log.New(os.Stderr, "", log.LstdFlags)
 
 	// init app
@@ -18,16 +22,17 @@ func main() {
 		fatalLog.Fatalf("failed to initialize app %v", err)
 	}
 	defer func() {
-		if err = app.Close(); err != nil {
+		if err := app.Close(); err != nil {
 			fatalLog.Fatalf("failed to clean up %v", err)
 		}
 	}()
 
 	// run app
-	if err = app.Run(); err != nil && !errors.Is(err, context.Canceled) {
+	if err := app.Run(); err != nil && !errors.Is(err, context.Canceled) {
 		app.Logger().Error("failed to start app", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	app.Logger().Info("app exited")
+	return 0
 }
