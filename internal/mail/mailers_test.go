@@ -131,6 +131,7 @@ func TestSMTPSubjectEncoding(t *testing.T) {
 	}{
 		{"Your invoice", "Your invoice"},
 		{"Café invoice", "=?utf-8?q?Caf=C3=A9_invoice?="},
+		{"invoice\r\nnotice", "=?utf-8?q?invoice=0D=0Anotice?="},
 	} {
 		var header strings.Builder
 		(&SMTPMailer{}).buildSubject(&header, &Message{Subject: tc.subject})
@@ -141,24 +142,36 @@ func TestSMTPSubjectEncoding(t *testing.T) {
 }
 
 func TestSMTPLongSubjectFolding(t *testing.T) {
-	subject := strings.Repeat("Café  🧪 ", 150) + "invoice"
-	var header strings.Builder
-	(&SMTPMailer{}).buildSubject(&header, &Message{Subject: subject})
-	for _, line := range strings.Split(header.String(), "\r\n") {
-		if len(line) > 76 {
-			t.Fatalf("subject header line has %d characters, want at most 76", len(line))
-		}
-	}
-	msg, err := mail.ReadMessage(strings.NewReader(header.String() + "\r\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := (&mime.WordDecoder{}).DecodeHeader(msg.Header.Get("Subject"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != subject {
-		t.Errorf("decoded subject = %q, want %q", got, subject)
+	for _, tc := range []struct {
+		name      string
+		subject   string
+		lineLimit int
+	}{
+		{"UTF-8", strings.Repeat("Café  🧪 ", 150) + "invoice", 76},
+		{"ASCII at limit", strings.Repeat("x", 998-len("Subject: ")), 998},
+		{"ASCII without spaces", strings.Repeat("x", 999-len("Subject: ")), 76},
+		{"ASCII with whitespace", "\t" + strings.Repeat("invoice \t ", 150) + "  ", 76},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var header strings.Builder
+			(&SMTPMailer{}).buildSubject(&header, &Message{Subject: tc.subject})
+			for _, line := range strings.Split(header.String(), "\r\n") {
+				if len(line) > tc.lineLimit {
+					t.Fatalf("subject header line has %d characters, want at most %d", len(line), tc.lineLimit)
+				}
+			}
+			msg, err := mail.ReadMessage(strings.NewReader(header.String() + "\r\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := (&mime.WordDecoder{}).DecodeHeader(msg.Header.Get("Subject"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.subject {
+				t.Error("decoded subject differs from the original")
+			}
+		})
 	}
 }
 
