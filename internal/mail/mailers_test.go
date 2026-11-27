@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net"
+	"net/mail"
 	"net/textproto"
 	"strings"
 	"syscall"
@@ -97,6 +99,28 @@ func TestSMTPSubjectEncoding(t *testing.T) {
 		if got, want := header.String(), "Subject: "+tc.want+"\r\n"; got != want {
 			t.Errorf("subject header = %q, want %q", got, want)
 		}
+	}
+}
+
+func TestSMTPLongSubjectFolding(t *testing.T) {
+	subject := strings.Repeat("Café  🧪 ", 150) + "invoice"
+	var header strings.Builder
+	(&SMTPMailer{}).buildSubject(&header, &Message{Subject: subject})
+	for _, line := range strings.Split(header.String(), "\r\n") {
+		if len(line) > 76 {
+			t.Fatalf("subject header line has %d characters, want at most 76", len(line))
+		}
+	}
+	msg, err := mail.ReadMessage(strings.NewReader(header.String() + "\r\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := (&mime.WordDecoder{}).DecodeHeader(msg.Header.Get("Subject"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != subject {
+		t.Errorf("decoded subject = %q, want %q", got, subject)
 	}
 }
 

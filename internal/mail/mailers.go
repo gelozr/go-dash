@@ -62,7 +62,13 @@ func (s *SMTPMailer) buildTo(sb *strings.Builder, m *Message) {
 }
 
 func (s *SMTPMailer) buildSubject(sb *strings.Builder, m *Message) {
-	sb.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", m.Subject) + "\r\n")
+	subject := mime.QEncoding.Encode("utf-8", m.Subject)
+	// RFC 2047 limits lines containing encoded words to 76 characters.
+	if subject != m.Subject && len("Subject: ")+len(subject) > 76 {
+		sb.WriteString("Subject:\r\n " + strings.ReplaceAll(subject, " ", "\r\n ") + "\r\n")
+		return
+	}
+	sb.WriteString("Subject: " + subject + "\r\n")
 }
 
 func (s *SMTPMailer) buildBody(sb *strings.Builder, m *Message, boundary string) error {
