@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/mail"
 	"net/smtp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -112,10 +113,14 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 	// closing boundary
 	sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
 
-	addr := fmt.Sprintf("%s:%d", s.Host, s.Port)
-	auth := smtp.PlainAuth("", s.Username, s.Password, s.Host)
+	host := s.Host
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	addr := net.JoinHostPort(host, strconv.Itoa(s.Port))
+	auth := smtp.PlainAuth("", s.Username, s.Password, host)
 	tlsCfg := &tls.Config{
-		ServerName:         s.Host,
+		ServerName:         host,
 		InsecureSkipVerify: s.SkipTLSVerify,
 	}
 
@@ -142,7 +147,7 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 		}
 		smtpConn = tlsConn
 	}
-	client, err := smtp.NewClient(smtpConn, s.Host)
+	client, err := smtp.NewClient(smtpConn, host)
 	if err != nil {
 		return fmt.Errorf("smtp new client: %w", err)
 	}

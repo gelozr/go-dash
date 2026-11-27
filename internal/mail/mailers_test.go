@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -52,8 +53,24 @@ func TestSMTPBodyRoundTrips(t *testing.T) {
 }
 
 func TestSMTPCancelClosesConnection(t *testing.T) {
-	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	t.Run("IPv4", func(t *testing.T) {
+		testSMTPCancelClosesConnection(t, "127.0.0.1", "127.0.0.1")
+	})
+	t.Run("IPv6", func(t *testing.T) {
+		testSMTPCancelClosesConnection(t, "::1", "::1")
+	})
+	t.Run("bracketed IPv6", func(t *testing.T) {
+		testSMTPCancelClosesConnection(t, "::1", "[::1]")
+	})
+}
+
+func testSMTPCancelClosesConnection(t *testing.T, listenIP, mailHost string) {
+	t.Helper()
+	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(listenIP)})
 	if err != nil {
+		if listenIP == "::1" && (errors.Is(err, syscall.EAFNOSUPPORT) || errors.Is(err, syscall.EADDRNOTAVAIL)) {
+			t.Skipf("IPv6 loopback unavailable: %v", err)
+		}
 		t.Fatal(err)
 	}
 	defer listener.Close()
@@ -63,7 +80,7 @@ func TestSMTPCancelClosesConnection(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	mailer := &SMTPMailer{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port}
+	mailer := &SMTPMailer{Host: mailHost, Port: listener.Addr().(*net.TCPAddr).Port}
 	done := make(chan error, 1)
 	go func() {
 		done <- mailer.Send(ctx, &Message{From: Address{Address: "sender@example.com"}, Text: "hello"})
@@ -71,6 +88,11 @@ func TestSMTPCancelClosesConnection(t *testing.T) {
 
 	conn, err := listener.AcceptTCP()
 	if err != nil {
+		select {
+		case sendErr := <-done:
+			t.Fatalf("SMTP connection was not accepted: %v; Send returned %v", err, sendErr)
+		default:
+		}
 		t.Fatal(err)
 	}
 	defer conn.Close()
