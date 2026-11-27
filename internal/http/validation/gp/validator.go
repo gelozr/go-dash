@@ -57,19 +57,27 @@ func New() (*Validator, error) {
 	}
 
 	instance.RegisterAlias("rfc3339", "datetime="+time.RFC3339)
-	err := instance.RegisterTranslation(
-		"rfc3339",
-		enTranslator,
-		func(ut ut.Translator) error {
-			return ut.Add("rfc3339", "{0} must be a valid RFC-3339 date-time", true)
-		},
-		func(ut ut.Translator, fe validator.FieldError) string {
-			t, _ := ut.T("rfc3339", fe.Field())
-			return t
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("register [rfc3339] validation translation error: %w", err)
+	for _, translation := range []struct {
+		translator ut.Translator
+		message    string
+	}{
+		{enTranslator, "{0} must be a valid RFC-3339 date-time"},
+		{frTranslator, "{0} doit être une date et une heure valides au format RFC 3339"},
+	} {
+		err := instance.RegisterTranslation(
+			"rfc3339",
+			translation.translator,
+			func(ut ut.Translator) error {
+				return ut.Add("rfc3339", translation.message, true)
+			},
+			func(ut ut.Translator, fe validator.FieldError) string {
+				t, _ := ut.T("rfc3339", fe.Field())
+				return t
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("register [%s] rfc3339 validation translation error: %w", translation.translator.Locale(), err)
+		}
 	}
 
 	registerOptionalType[string](instance)
