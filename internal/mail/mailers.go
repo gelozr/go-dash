@@ -184,8 +184,7 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("writer close: %w", err)
 	}
-	if err := client.Quit(); err != nil {
-		return fmt.Errorf("quit: %w", err)
-	}
+	// The relay has accepted the message, so a QUIT failure must not prompt a retry.
+	_ = client.Quit()
 	return nil
 }

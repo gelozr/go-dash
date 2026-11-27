@@ -14,6 +14,16 @@ import (
 )
 
 func TestSMTPSendsWithoutCredentials(t *testing.T) {
+	t.Run("successful QUIT", func(t *testing.T) {
+		testSMTPSendsWithoutCredentials(t, "221 goodbye")
+	})
+	t.Run("failed QUIT after acceptance", func(t *testing.T) {
+		testSMTPSendsWithoutCredentials(t, "421 closing connection")
+	})
+}
+
+func testSMTPSendsWithoutCredentials(t *testing.T, quitReply string) {
+	t.Helper()
 	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1")})
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +64,7 @@ func TestSMTPSendsWithoutCredentials(t *testing.T) {
 		{"250 recipient accepted", "DATA"},
 		{"354 send message", ""},
 		{"250 message accepted", "QUIT"},
-		{"221 goodbye", ""},
+		{quitReply, ""},
 	} {
 		if err := relay.PrintfLine("%s", step.reply); err != nil {
 			t.Fatal(err)
