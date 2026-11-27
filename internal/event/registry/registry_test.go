@@ -2,8 +2,10 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	himoevent "github.com/gelozr/himo/event"
@@ -69,4 +71,37 @@ func TestCustomerCreatedSendsWelcomeEmail(t *testing.T) {
 	if len(mailer.sent) != 1 || mailer.sent[0].To[0].Address != c.Email {
 		t.Fatalf("sent = %+v, want one welcome email to %s", mailer.sent, c.Email)
 	}
+}
+
+type stalledMailer struct {
+	err error
+}
+
+func (m *stalledMailer) Send(ctx context.Context, _ *mail.Message) error {
+	select {
+	case <-ctx.Done():
+		m.err = ctx.Err()
+	case <-time.After(2 * time.Minute):
+		m.err = errors.New("send was still running after two minutes")
+	}
+	return m.err
+}
+
+func TestCustomerCreatedCancelsStalledWelcomeEmail(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := customer.Customer{ID: uuid.New(), Name: "Ada", Email: "ada@example.com"}
+		broker := himoevent.NewBroker()
+		mailer := &stalledMailer{}
+		subs := RegisterAll(broker, customer.NewService(oneCustomer{c: c}, broker, nopLogger{}), mailer)
+
+		if err := broker.Publish(t.Context(), customer.Created{ID: c.ID}); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+		if err := subs.Wait(t.Context()); err != nil {
+			t.Fatalf("Wait: %v", err)
+		}
+		if !errors.Is(mailer.err, context.DeadlineExceeded) {
+			t.Fatalf("Send returned %v, want context.DeadlineExceeded", mailer.err)
+		}
+	})
 }
