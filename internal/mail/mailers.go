@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"mime/quotedprintable"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"strings"
@@ -89,7 +90,7 @@ func (s *SMTPMailer) buildBody(sb *strings.Builder, m *Message, boundary string)
 	return nil
 }
 
-func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
+func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 	boundary := uuid.New().String()
 
 	var sb strings.Builder
@@ -118,89 +119,65 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) error {
 		InsecureSkipVerify: s.SkipTLSVerify,
 	}
 
-	// honour context cancellation
-	done := make(chan error, 1)
-
-	go func() {
-		var client *smtp.Client
-		var err error
-
-		if s.Port == 465 {
-			conn, e := tls.Dial("tcp", addr, tlsCfg)
-			if e != nil {
-				done <- fmt.Errorf("dial tls: %w", e)
-				return
-			}
-
-			client, err = smtp.NewClient(conn, s.Host)
-			if err != nil {
-				_ = conn.Close()
-				done <- fmt.Errorf("smtp new client: %w", err)
-				return
-			}
-		} else {
-			client, err = smtp.Dial(addr)
-			if err != nil {
-				done <- fmt.Errorf("smtp dial: %w", err)
-				return
-			}
-
-			if ok, _ := client.Extension("STARTTLS"); ok {
-				if err = client.StartTLS(tlsCfg); err != nil {
-					_ = client.Close()
-					done <- fmt.Errorf("start tls: %w", err)
-					return
-				}
-			}
+	defer func() {
+		if ctxErr := ctx.Err(); err != nil && ctxErr != nil {
+			err = ctxErr
 		}
-
-		// done is written exactly once below; a second send would block forever once Send has returned
-		defer client.Close()
-
-		if err = client.Auth(auth); err != nil {
-			done <- fmt.Errorf("client auth: %w", err)
-			return
-		}
-		if err = client.Mail(m.From.Address); err != nil {
-			done <- fmt.Errorf("client mail: %w", err)
-			return
-		}
-		for _, a := range m.To {
-			if err = client.Rcpt(a.Address); err != nil {
-				done <- fmt.Errorf("client rcpt: %s: %w", a.Address, err)
-				return
-			}
-		}
-
-		w, err := client.Data()
-		if err != nil {
-			done <- fmt.Errorf("client data: %w", err)
-			return
-		}
-
-		_, err = w.Write([]byte(sb.String()))
-		if err != nil {
-			done <- fmt.Errorf("write: %w", err)
-			return
-		}
-
-		if err = w.Close(); err != nil {
-			done <- fmt.Errorf("writer close: %w", err)
-			return
-		}
-
-		if err = client.Quit(); err != nil {
-			done <- fmt.Errorf("quit: %w", err)
-			return
-		}
-
-		done <- nil
 	}()
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-done:
-		return err
+	var dialer net.Dialer
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("smtp dial: %w", err)
 	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+
+	smtpConn := conn
+	if s.Port == 465 {
+		tlsConn := tls.Client(conn, tlsCfg)
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			return fmt.Errorf("dial tls: %w", err)
+		}
+		smtpConn = tlsConn
+	}
+	client, err := smtp.NewClient(smtpConn, s.Host)
+	if err != nil {
+		return fmt.Errorf("smtp new client: %w", err)
+	}
+	defer client.Close()
+
+	if s.Port != 465 {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if err := client.StartTLS(tlsCfg); err != nil {
+				return fmt.Errorf("start tls: %w", err)
+			}
+		}
+	}
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("client auth: %w", err)
+	}
+	if err := client.Mail(m.From.Address); err != nil {
+		return fmt.Errorf("client mail: %w", err)
+	}
+	for _, a := range m.To {
+		if err := client.Rcpt(a.Address); err != nil {
+			return fmt.Errorf("client rcpt: %s: %w", a.Address, err)
+		}
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("client data: %w", err)
+	}
+	if _, err := w.Write([]byte(sb.String())); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("writer close: %w", err)
+	}
+	if err := client.Quit(); err != nil {
+		return fmt.Errorf("quit: %w", err)
+	}
+	return nil
 }
