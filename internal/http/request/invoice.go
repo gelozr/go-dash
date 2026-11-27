@@ -1,6 +1,7 @@
 package request
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -42,11 +43,27 @@ func (req *CreateInvoice) ToInvoice() (invoice.Invoice, error) {
 type UpdateInvoice struct {
 	CustomerID optional.Optional[*string] `json:"customer_id" validate:"omitnil,required,uuid4"`
 	Amount     *float64                   `json:"amount" validate:"omitnil,min=0"`
-	Status     optional.Optional[string]  `json:"status" validate:"omitnil,required,oneof=pending paid"`
+	Status     *string                    `json:"status" validate:"omitnil,required,oneof=pending paid"`
 	Date       optional.Optional[*string] `json:"date" validate:"omitnil,required,rfc3339"`
 	// Date Optional[nullable.Null[string]] `json:"date" validate:"omitnil,required,rfc3339"`
 	// Date       Optional[nullable.Null[string]] `json:"date" validate:"omitnil,required,rfc3339"`
 	// IsActive optional.Optional[*bool]   `json:"is_active" validate:"omitnil,boolean"`
+}
+
+func (req *UpdateInvoice) UnmarshalJSON(data []byte) error {
+	type invoiceFields UpdateInvoice
+	body := struct {
+		*invoiceFields
+		Status optional.Optional[string] `json:"status"`
+	}{invoiceFields: (*invoiceFields)(req)}
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	// A JSON null must fail status validation, while an omitted status skips it.
+	if body.Status.IsPresent {
+		req.Status = &body.Status.Val
+	}
+	return nil
 }
 
 func (req *UpdateInvoice) ToDTO() (invoice.UpdateInput, error) {
@@ -62,10 +79,13 @@ func (req *UpdateInvoice) ToDTO() (invoice.UpdateInput, error) {
 			response.NewError("invalid date", http.StatusUnprocessableEntity, err)
 	}
 
-	return invoice.UpdateInput{
+	update := invoice.UpdateInput{
 		CustomerID: customerID,
 		Amount:     req.Amount,
-		Status:     req.Status.Val,
 		Date:       date,
-	}, nil
+	}
+	if req.Status != nil {
+		update.Status = *req.Status
+	}
+	return update, nil
 }
