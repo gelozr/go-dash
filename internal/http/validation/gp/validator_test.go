@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-playground/validator/v10"
@@ -26,6 +27,40 @@ func TestValidateStructRejectsInvalidInput(t *testing.T) {
 		var invalid *validator.InvalidValidationError
 		if err := v.ValidateStruct(t.Context(), input); !errors.As(err, &invalid) {
 			t.Errorf("ValidateStruct(%T) = %v, want invalid validation error", input, err)
+		}
+	}
+}
+
+func TestCreateCustomerFieldLengths(t *testing.T) {
+	v, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	imageURL := "https://example.com/" + strings.Repeat("a", 235)
+	req := request.CreateCustomer{
+		Name:     strings.Repeat("é", 255),
+		Email:    strings.Repeat("a", 57) + "@" + strings.Repeat(strings.Repeat("b", 62)+".", 3) + "test.org",
+		ImageURL: &imageURL,
+	}
+	if err := v.ValidateStruct(t.Context(), req); err != nil {
+		t.Fatalf("255-character fields rejected: %v", err)
+	}
+	req.ImageURL = nil
+	if err := v.ValidateStruct(t.Context(), req); err != nil {
+		t.Fatalf("omitted image URL rejected: %v", err)
+	}
+
+	req.Name += "é"
+	req.Email = "a" + req.Email
+	imageURL += "a"
+	req.ImageURL = &imageURL
+	var fields validation.Errors
+	if err := v.ValidateStruct(t.Context(), req); !errors.As(err, &fields) {
+		t.Fatalf("expected length validation errors, got %v", err)
+	}
+	for _, name := range []string{"name", "email", "image_url"} {
+		if len(fields[name]) == 0 {
+			t.Errorf("expected a length validation error for %s, got %v", name, fields)
 		}
 	}
 }
