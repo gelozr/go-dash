@@ -41,20 +41,25 @@ func (req *CreateInvoice) ToInvoice() (invoice.Invoice, error) {
 }
 
 type UpdateInvoice struct {
-	CustomerID optional.Optional[*string] `json:"customer_id" validate:"omitnil,required,uuid4"`
-	Amount     *float64                   `json:"amount" validate:"omitnil,min=0"`
-	Status     *string                    `json:"status" validate:"omitnil,required,oneof=pending paid"`
-	Date       optional.Optional[*string] `json:"date" validate:"omitnil,required,rfc3339"`
+	CustomerID *string  `json:"customer_id" form:"customer_id" validate:"omitnil,required,uuid4"`
+	Amount     *float64 `json:"amount" validate:"omitnil,min=0"`
+	Status     *string  `json:"status" validate:"omitnil,required,oneof=pending paid"`
+	Date       *string  `json:"date" validate:"omitnil,required,rfc3339"`
 	// Date Optional[nullable.Null[string]] `json:"date" validate:"omitnil,required,rfc3339"`
 	// Date       Optional[nullable.Null[string]] `json:"date" validate:"omitnil,required,rfc3339"`
 	// IsActive optional.Optional[*bool]   `json:"is_active" validate:"omitnil,boolean"`
+
+	clearCustomerID bool
+	clearDate       bool
 }
 
 func (req *UpdateInvoice) UnmarshalJSON(data []byte) error {
 	type invoiceFields UpdateInvoice
 	body := struct {
 		*invoiceFields
-		Status optional.Optional[string] `json:"status"`
+		CustomerID optional.Optional[*string] `json:"customer_id"`
+		Status     optional.Optional[string]  `json:"status"`
+		Date       optional.Optional[*string] `json:"date"`
 	}{invoiceFields: (*invoiceFields)(req)}
 	if err := json.Unmarshal(data, &body); err != nil {
 		return err
@@ -63,17 +68,25 @@ func (req *UpdateInvoice) UnmarshalJSON(data []byte) error {
 	if body.Status.IsPresent {
 		req.Status = &body.Status.Val
 	}
+	if body.CustomerID.IsPresent {
+		req.CustomerID = body.CustomerID.Val
+		req.clearCustomerID = body.CustomerID.IsNull
+	}
+	if body.Date.IsPresent {
+		req.Date = body.Date.Val
+		req.clearDate = body.Date.IsNull
+	}
 	return nil
 }
 
 func (req *UpdateInvoice) ToDTO() (invoice.UpdateInput, error) {
-	customerID, err := optional.StringToUUID(req.CustomerID)
+	customerID, err := optional.StringToUUID(invoiceStringUpdate(req.CustomerID, req.clearCustomerID))
 	if err != nil {
 		return invoice.UpdateInput{},
 			response.NewError("invalid customer id", http.StatusUnprocessableEntity, err)
 	}
 
-	date, err := optional.StringToTime(req.Date, time.RFC3339)
+	date, err := optional.StringToTime(invoiceStringUpdate(req.Date, req.clearDate), time.RFC3339)
 	if err != nil {
 		return invoice.UpdateInput{},
 			response.NewError("invalid date", http.StatusUnprocessableEntity, err)
@@ -88,4 +101,11 @@ func (req *UpdateInvoice) ToDTO() (invoice.UpdateInput, error) {
 		update.Status = *req.Status
 	}
 	return update, nil
+}
+
+func invoiceStringUpdate(value *string, clear bool) optional.Optional[string] {
+	if value == nil && !clear {
+		return optional.Optional[string]{}
+	}
+	return optional.FromPtr(value)
 }
