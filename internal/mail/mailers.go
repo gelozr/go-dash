@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"mime"
 	"mime/quotedprintable"
@@ -17,6 +18,8 @@ import (
 
 	"github.com/gelozr/go-dash/internal/config"
 )
+
+const maxHeaderLineLength = 998
 
 type SMTPMailer struct {
 	Host          string
@@ -63,6 +66,19 @@ func (s *SMTPMailer) buildTo(sb *strings.Builder, m *Message) {
 
 func (s *SMTPMailer) buildSubject(sb *strings.Builder, m *Message) {
 	subject := mime.QEncoding.Encode("utf-8", m.Subject)
+	if subject == m.Subject && len("Subject: ")+len(subject) > maxHeaderLineLength {
+		// The encoded-word syntax leaves 60 base64 characters under the RFC 2047 limit.
+		const maxWordBytes = 45
+		sb.WriteString("Subject:")
+		for len(subject) > 0 {
+			size := min(len(subject), maxWordBytes)
+			word := base64.StdEncoding.EncodeToString([]byte(subject[:size]))
+			fmt.Fprintf(sb, "\r\n =?us-ascii?b?%s?=", word)
+			subject = subject[size:]
+		}
+		sb.WriteString("\r\n")
+		return
+	}
 	// RFC 2047 limits lines containing encoded words to 76 characters.
 	if subject != m.Subject && len("Subject: ")+len(subject) > 76 {
 		sb.WriteString("Subject:\r\n " + strings.ReplaceAll(subject, " ", "\r\n ") + "\r\n")
@@ -72,7 +88,6 @@ func (s *SMTPMailer) buildSubject(sb *strings.Builder, m *Message) {
 }
 
 func writeCustomHeaders(sb *strings.Builder, headers map[string]string) error {
-	const maxHeaderLineLength = 998
 	seen := make(map[string]struct{}, len(headers))
 	for name, value := range headers {
 		if name == "" || strings.IndexFunc(name, func(c rune) bool {
