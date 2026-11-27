@@ -12,6 +12,22 @@ import (
 	"time"
 )
 
+func TestSMTPSubjectEncoding(t *testing.T) {
+	for _, tc := range []struct {
+		subject string
+		want    string
+	}{
+		{"Your invoice", "Your invoice"},
+		{"Café invoice", "=?utf-8?q?Caf=C3=A9_invoice?="},
+	} {
+		var header strings.Builder
+		(&SMTPMailer{}).buildSubject(&header, &Message{Subject: tc.subject})
+		if got, want := header.String(), "Subject: "+tc.want+"\r\n"; got != want {
+			t.Errorf("subject header = %q, want %q", got, want)
+		}
+	}
+}
+
 func TestSMTPBodyRoundTrips(t *testing.T) {
 	msg := &Message{
 		Text: "Use =20 literally.\r\n" + strings.Repeat("café ", 30),
