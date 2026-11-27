@@ -3,9 +3,12 @@ package request_test
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
@@ -69,6 +72,57 @@ func TestUpdateInvoiceStatus(t *testing.T) {
 			sql := tx.Statement.SQL.String()
 			if !strings.Contains(sql, "`amount`=") || strings.Contains(sql, "`status`=") != (tt.wantStatus != "") {
 				t.Fatalf("unexpected invoice update SQL: %s", sql)
+			}
+		})
+	}
+}
+
+func TestUpdateInvoiceStatusBodyFormats(t *testing.T) {
+	validator, err := gp.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New()
+	app.Patch("/", func(c fiber.Ctx) error {
+		var req request.UpdateInvoice
+		if err := c.Bind().Body(&req); err != nil {
+			return err
+		}
+		if err := validator.ValidateStruct(c.Context(), req); err != nil {
+			return err
+		}
+		update, err := req.ToDTO()
+		if err != nil {
+			return err
+		}
+		return c.SendString(update.Status)
+	})
+
+	for _, tt := range []struct {
+		name        string
+		contentType string
+		body        string
+		wantStatus  string
+	}{
+		{"form status", fiber.MIMEApplicationForm, "amount=1&status=paid", "paid"},
+		{"form omitted", fiber.MIMEApplicationForm, "amount=1", ""},
+		{"XML status", fiber.MIMEApplicationXML, "<UpdateInvoice><Amount>1</Amount><Status>paid</Status></UpdateInvoice>", "paid"},
+		{"XML omitted", fiber.MIMEApplicationXML, "<UpdateInvoice><Amount>1</Amount></UpdateInvoice>", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("PATCH", "/", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", tt.contentType)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != 200 || string(body) != tt.wantStatus {
+				t.Fatalf("got HTTP %d with body %q, want HTTP 200 with body %q", resp.StatusCode, body, tt.wantStatus)
 			}
 		})
 	}
