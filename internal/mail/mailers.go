@@ -71,6 +71,37 @@ func (s *SMTPMailer) buildSubject(sb *strings.Builder, m *Message) {
 	sb.WriteString("Subject: " + subject + "\r\n")
 }
 
+func writeCustomHeaders(sb *strings.Builder, headers map[string]string) error {
+	const maxHeaderLineLength = 998
+	seen := make(map[string]struct{}, len(headers))
+	for name, value := range headers {
+		if name == "" || strings.IndexFunc(name, func(c rune) bool {
+			return c < '!' || c > '~' || c == ':'
+		}) >= 0 {
+			return fmt.Errorf("invalid custom header name %q", name)
+		}
+		key := strings.ToLower(name)
+		switch key {
+		case "from", "sender", "to", "cc", "bcc", "date", "message-id", "subject", "received", "return-path", "mime-version":
+			return fmt.Errorf("reserved custom header %q", name)
+		}
+		if strings.HasPrefix(key, "content-") || strings.HasPrefix(key, "resent-") {
+			return fmt.Errorf("reserved custom header %q", name)
+		}
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("duplicate custom header %q", name)
+		}
+		if len(name)+len(": ")+len(value) > maxHeaderLineLength || strings.IndexFunc(value, func(c rune) bool {
+			return c != '\t' && (c < ' ' || c > '~')
+		}) >= 0 {
+			return fmt.Errorf("invalid value for custom header %q", name)
+		}
+		seen[key] = struct{}{}
+		fmt.Fprintf(sb, "%s: %s\r\n", name, value)
+	}
+	return nil
+}
+
 func (s *SMTPMailer) buildBody(sb *strings.Builder, m *Message, boundary string) error {
 	for _, part := range []struct {
 		contentType string
@@ -109,6 +140,9 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 	s.buildSubject(&sb, m)
 	s.buildFrom(&sb, m)
 	s.buildTo(&sb, m)
+	if err := writeCustomHeaders(&sb, m.Headers); err != nil {
+		return err
+	}
 
 	sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%s\r\n", boundary))
 	sb.WriteString("\r\n") // end of headers
