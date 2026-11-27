@@ -13,7 +13,7 @@ import (
 
 type CreateInvoice struct {
 	CustomerID string  `json:"customer_id" validate:"required"`
-	Amount     float64 `json:"amount" validate:"required"`
+	Amount     float64 `json:"amount" validate:"required,gt=0"`
 	Status     string  `json:"status" validate:"required,oneof=pending paid"`
 	Date       string  `json:"date" validate:"required,rfc3339"`
 }
