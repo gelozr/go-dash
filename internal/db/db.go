@@ -3,9 +3,11 @@ package db
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -80,11 +82,14 @@ func Open(cfg *config.Config, log logger.Logger) (*DB, error) {
 }
 
 func mysqlDSN(cfg *config.Config) string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	host := cfg.DBHost
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		cfg.DBUser,
 		cfg.DBPass,
-		cfg.DBHost,
-		cfg.DBPort,
+		net.JoinHostPort(host, strconv.Itoa(cfg.DBPort)),
 		url.PathEscape(cfg.DBName),
 	)
 }

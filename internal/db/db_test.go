@@ -75,3 +75,18 @@ func TestMySQLDSNPreservesDatabaseName(t *testing.T) {
 		t.Errorf("parsed database name = %q, want %q", parsed.DBName, cfg.DBName)
 	}
 }
+
+func TestMySQLDSNIPv6Host(t *testing.T) {
+	for _, host := range []string{"::1", "[::1]"} {
+		t.Run(host, func(t *testing.T) {
+			cfg := &config.Config{DBHost: host, DBPort: 3307}
+			parsed, err := mysqldriver.ParseDSN(mysqlDSN(cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "[::1]:3307"; parsed.Addr != want {
+				t.Errorf("parsed address = %q, want %q", parsed.Addr, want)
+			}
+		})
+	}
+}
