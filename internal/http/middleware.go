@@ -36,9 +36,14 @@ var (
 
 func AuthMiddleware(g *auth.Guard) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
-		if token == "" {
+		header := c.Get("Authorization")
+		if header == "" {
 			return fiber.NewError(http.StatusUnauthorized, "missing authorization header")
+		}
+		scheme, token, _ := strings.Cut(header, " ")
+		token = strings.TrimLeft(token, " ")
+		if !strings.EqualFold(scheme, "Bearer") || token == "" {
+			return fiber.NewError(http.StatusUnauthorized, "invalid token")
 		}
 
 		userID, err := g.Verify(c.Context(), token)
