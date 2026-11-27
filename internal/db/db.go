@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,7 +85,7 @@ func mysqlDSN(cfg *config.Config) string {
 		cfg.DBPass,
 		cfg.DBHost,
 		cfg.DBPort,
-		cfg.DBName,
+		url.PathEscape(cfg.DBName),
 	)
 }
 
