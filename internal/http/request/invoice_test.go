@@ -25,6 +25,48 @@ import (
 	"github.com/gelozr/go-dash/internal/optional"
 )
 
+func TestCreateInvoiceCustomerBodyFormats(t *testing.T) {
+	const id = "ef7f5245-14ea-4b8b-9869-7f0f86dc7bdc"
+	const date = "2026-11-27T12:00:00Z"
+	wantID := uuid.MustParse(id)
+	validator, err := gp.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		name, contentType, body string
+	}{
+		{"form", fiber.MIMEApplicationForm, "customer_id=" + id + "&amount=1&status=paid&date=" + date},
+		{"JSON", fiber.MIMEApplicationJSON, `{"customer_id":"` + id + `","amount":1,"status":"paid","date":"` + date + `"}`},
+		{"XML", fiber.MIMEApplicationXML, "<CreateInvoice><CustomerID>" + id + "</CustomerID><Amount>1</Amount><Status>paid</Status><Date>" + date + "</Date></CreateInvoice>"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &invoiceRequestStore{}
+			log := invoiceRequestLogger{}
+			service := invoice.NewService(store, store, store, log)
+			handler := dashhttp.NewInvoiceHandler(service, validator, log)
+			app := fiber.New()
+			app.Use(dashhttp.ValidationResponse())
+			app.Post("/invoices", handler.Create)
+			req := httptest.NewRequest(http.MethodPost, "/invoices", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", tt.contentType)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusCreated {
+				body, err := io.ReadAll(resp.Body)
+				t.Fatalf("HTTP status = %d, want %d. Body %q, read error %v", resp.StatusCode, http.StatusCreated, body, err)
+			}
+			if store.inserted.CustomerID == nil || *store.inserted.CustomerID != wantID {
+				t.Fatalf("inserted customer ID = %v, want %v", store.inserted.CustomerID, wantID)
+			}
+		})
+	}
+}
+
 func TestUpdateInvoiceStatus(t *testing.T) {
 	validator, err := gp.New()
 	if err != nil {
@@ -214,8 +256,8 @@ func TestUpdateInvoiceCustomerAndDateBodyFormats(t *testing.T) {
 		{"invalid XML date", fiber.MIMEApplicationXML, "<UpdateInvoice><Date>invalid</Date></UpdateInvoice>", http.StatusUnprocessableEntity, optional.Optional[uuid.UUID]{}, optional.Optional[time.Time]{}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			store := &invoiceUpdateStore{}
-			log := invoiceUpdateLogger{}
+			store := &invoiceRequestStore{}
+			log := invoiceRequestLogger{}
 			service := invoice.NewService(store, store, store, log)
 			handler := dashhttp.NewInvoiceHandler(service, validator, log)
 			app := fiber.New()
@@ -239,26 +281,32 @@ func TestUpdateInvoiceCustomerAndDateBodyFormats(t *testing.T) {
 	}
 }
 
-type invoiceUpdateStore struct {
+type invoiceRequestStore struct {
 	invoice.Store
-	update invoice.UpdateInput
+	inserted invoice.Invoice
+	update   invoice.UpdateInput
 }
 
-func (*invoiceUpdateStore) Exists(context.Context, uuid.UUID) (bool, error) { return true, nil }
+func (*invoiceRequestStore) Exists(context.Context, uuid.UUID) (bool, error) { return true, nil }
 
-func (*invoiceUpdateStore) Find(_ context.Context, id uuid.UUID) (*invoice.Invoice, error) {
+func (*invoiceRequestStore) Find(_ context.Context, id uuid.UUID) (*invoice.Invoice, error) {
 	return &invoice.Invoice{ID: id}, nil
 }
 
-func (s *invoiceUpdateStore) Update(_ context.Context, _ uuid.UUID, update invoice.UpdateInput) error {
+func (s *invoiceRequestStore) Insert(_ context.Context, inv invoice.Invoice) (*invoice.Invoice, error) {
+	s.inserted = inv
+	return &inv, nil
+}
+
+func (s *invoiceRequestStore) Update(_ context.Context, _ uuid.UUID, update invoice.UpdateInput) error {
 	s.update = update
 	return nil
 }
 
-func (*invoiceUpdateStore) Do(ctx context.Context, fn func(context.Context) error) error {
+func (*invoiceRequestStore) Do(ctx context.Context, fn func(context.Context) error) error {
 	return fn(ctx)
 }
 
-type invoiceUpdateLogger struct{ logger.Logger }
+type invoiceRequestLogger struct{ logger.Logger }
 
-func (log invoiceUpdateLogger) With(...any) logger.Logger { return log }
+func (log invoiceRequestLogger) With(...any) logger.Logger { return log }
