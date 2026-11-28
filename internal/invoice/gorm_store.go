@@ -85,15 +85,15 @@ func NewStore(db *db.DB, logger logger.Logger) *GormStore {
 	}
 }
 
-func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.Page) ([]Invoice, int64, error) {
-	var sort string
-	switch req.Sort {
-	case listing.SortLatest:
-		sort = "DESC"
-	default:
-		sort = "ASC"
+func invoiceDateOrder(sort listing.SortOrder) string {
+	direction := "ASC"
+	if sort == listing.SortLatest {
+		direction = "DESC"
 	}
+	return "invoices.date " + direction + ", invoices.id " + direction
+}
 
+func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.Page) ([]Invoice, int64, error) {
 	pattern := "%" + searchPatternEscaper.Replace(req.Text) + "%"
 	q := s.db.Conn(ctx).
 		Model(&invoiceModel{}).
@@ -105,7 +105,7 @@ func (s *GormStore) Search(ctx context.Context, req SearchFilter, page listing.P
 			CAST(invoices.date AS CHAR) LIKE @search ESCAPE '!' OR
 			invoices.status LIKE @search ESCAPE '!'
 		`, sql.Named("search", pattern)).
-		Order("invoices.date " + sort + ", invoices.id " + sort).
+		Order(invoiceDateOrder(req.Sort)).
 		// gorm statements aren't safe to reuse after a finisher; a session clones per call
 		Session(&gorm.Session{})
 
@@ -189,14 +189,6 @@ func (s *GormStore) Delete(ctx context.Context, id uuid.UUID) error {
 
 func (s *GormStore) ListWithCustomerInfo(ctx context.Context, sort listing.SortOrder, limit int) ([]WithCustomerInfo, error) {
 	var out []WithCustomerInfo
-	var sortOrder string
-
-	switch sort {
-	case listing.SortLatest:
-		sortOrder = "DESC"
-	default:
-		sortOrder = "ASC"
-	}
 
 	err := s.db.Conn(ctx).
 		Model(&invoiceModel{}).
@@ -207,7 +199,7 @@ func (s *GormStore) ListWithCustomerInfo(ctx context.Context, sort listing.SortO
 			customers.image_url as customer_image_url
 		`).
 		Joins("LEFT JOIN customers ON invoices.customer_id = customers.id").
-		Order("invoices.date " + sortOrder + ", invoices.id " + sortOrder).
+		Order(invoiceDateOrder(sort)).
 		Limit(limit).
 		Find(&out).Error
 
