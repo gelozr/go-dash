@@ -112,18 +112,16 @@ func (l Logger) Close() error {
 }
 
 func setOutput(cfg *config.Config) (io.WriteCloser, error) {
-	var w io.WriteCloser
-
-	if strings.EqualFold(cfg.LogOutput, "file") {
-		if err := os.MkdirAll(filepath.Dir(cfg.LogPath), 0o755); err != nil {
-			return nil, fmt.Errorf("create output dir: %w", err)
-		}
-		f, err := os.OpenFile(cfg.LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			return nil, fmt.Errorf("open output file: %w", err)
-		}
-		w = f
+	if !strings.EqualFold(cfg.LogOutput, "file") {
+		return nil, nil
 	}
 
-	return w, nil
+	if err := os.MkdirAll(filepath.Dir(cfg.LogPath), 0o755); err != nil {
+		return nil, fmt.Errorf("create output dir: %w", err)
+	}
+	f, err := os.OpenFile(cfg.LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open output file: %w", err)
+	}
+	return f, nil
 }
