@@ -67,6 +67,7 @@ func fiberErrHandler(cfg *config.Config, logger logger.Logger) fiber.ErrorHandle
 		var e *response.AppError
 		var fe *fiber.Error
 		var jsonSynErr *json.SyntaxError
+		var bindErr *fiber.BindError
 
 		switch {
 		case errors.As(err, &e):
@@ -78,6 +79,9 @@ func fiberErrHandler(cfg *config.Config, logger logger.Logger) fiber.ErrorHandle
 		case errors.As(err, &jsonSynErr):
 			code = fiber.StatusBadRequest
 			message = "Invalid JSON"
+		case errors.As(err, &bindErr) && bindErr.Source == fiber.BindSourceBody:
+			code = fiber.StatusBadRequest
+			message = "Invalid request body"
 		}
 
 		if code >= fiber.StatusInternalServerError {
