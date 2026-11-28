@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"cmp"
 	"context"
 	"errors"
 
@@ -50,7 +51,7 @@ func NewManager(cfg *config.Config) Manager {
 
 	return &manager{
 		mailers:       mailers,
-		defaultDriver: getDefaultDriver(cfg),
+		defaultDriver: cmp.Or(Driver(cfg.MailDriver), SMTP),
 		defaultFrom:   Address{Name: cfg.MailFromName, Address: cfg.MailFromAddress},
 	}
 }
@@ -95,12 +96,4 @@ func (m *manager) SetDefaultDriver(driver Driver) error {
 
 	m.defaultDriver = driver
 	return nil
-}
-
-func getDefaultDriver(cfg *config.Config) Driver {
-	defaultDriver := SMTP
-	if cfg.MailDriver != "" {
-		defaultDriver = Driver(cfg.MailDriver)
-	}
-	return defaultDriver
 }
