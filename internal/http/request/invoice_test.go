@@ -324,6 +324,7 @@ type invoiceRequestStore struct {
 	update   invoice.UpdateInput
 }
 
+func (*invoiceRequestStore) LockForUpdate(context.Context, uuid.UUID) error  { return nil }
 func (*invoiceRequestStore) Exists(context.Context, uuid.UUID) (bool, error) { return true, nil }
 
 func (*invoiceRequestStore) Find(_ context.Context, id uuid.UUID) (*invoice.Invoice, error) {

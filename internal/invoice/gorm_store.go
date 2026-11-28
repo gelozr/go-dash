@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/gelozr/go-dash/internal/db"
 	"github.com/gelozr/go-dash/internal/listing"
@@ -137,14 +138,18 @@ func (s *GormStore) Find(ctx context.Context, id uuid.UUID) (*Invoice, error) {
 	return &inv, nil
 }
 
-func (s *GormStore) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
-	tx := s.db.Conn(ctx).Model(&invoiceModel{}).Where("id = ?", id)
-
-	exists, err := db.RecordExists(tx)
+func (s *GormStore) LockForUpdate(ctx context.Context, id uuid.UUID) error {
+	q := s.db.Conn(ctx).Model(&invoiceModel{}).
+		Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+		Where("id = ?", id)
+	exists, err := db.RecordExists(q)
 	if err != nil {
-		return false, fmt.Errorf("query invoice exists: %w", err)
+		return fmt.Errorf("lock invoice: %w", err)
 	}
-	return exists, nil
+	if !exists {
+		return ErrInvoiceNotFound
+	}
+	return nil
 }
 
 func (s *GormStore) Insert(ctx context.Context, i Invoice) (*Invoice, error) {
