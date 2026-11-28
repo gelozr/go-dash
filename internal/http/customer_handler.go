@@ -32,12 +32,10 @@ func NewCustomerHandler(svc *customer.Service, validator validation.Validator, l
 func (h *CustomerHandler) List(c fiber.Ctx) error {
 	customers, err := h.svc.List(c.Context())
 	if err != nil {
-		switch {
-		case errors.Is(err, customer.ErrCustomerNotFound):
+		if errors.Is(err, customer.ErrCustomerNotFound) {
 			return fiber.NewError(fiber.StatusNotFound, "customer not found.")
-		default:
-			return fmt.Errorf("retrieve customer: %w", err)
 		}
+		return fmt.Errorf("retrieve customer: %w", err)
 	}
 
 	return c.JSON(
@@ -53,12 +51,10 @@ func (h *CustomerHandler) Get(c fiber.Ctx) error {
 
 	cust, err := h.svc.GetByID(c.Context(), id)
 	if err != nil {
-		switch {
-		case errors.Is(err, customer.ErrCustomerNotFound):
+		if errors.Is(err, customer.ErrCustomerNotFound) {
 			return fiber.NewError(fiber.StatusNotFound, "Customer not found.")
-		default:
-			return fmt.Errorf("get customer by id: %w", err)
 		}
+		return fmt.Errorf("get customer by id: %w", err)
 	}
 
 	return c.JSON(
@@ -81,12 +77,10 @@ func (h *CustomerHandler) Create(c fiber.Ctx) error {
 
 	cust, err := h.svc.Create(c.Context(), reqCust)
 	if err != nil {
-		switch {
-		case errors.Is(err, customer.ErrEmailAlreadyTaken):
+		if errors.Is(err, customer.ErrEmailAlreadyTaken) {
 			return fiber.NewError(fiber.StatusConflict, "email already taken.")
-		default:
-			return fmt.Errorf("create customer: %w", err)
 		}
+		return fmt.Errorf("create customer: %w", err)
 	}
 
 	return c.Status(http.StatusCreated).JSON(
