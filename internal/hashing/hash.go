@@ -42,14 +42,15 @@ func NewManager(cfg *config.Config) Manager {
 	}
 }
 
-func (m *manager) getHasher(driver Driver) (Hasher, error) {
+func (m *manager) getDefaultHasher() (Hasher, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if hasher, ok := m.hashers[driver]; ok {
+	if hasher, ok := m.hashers[m.defaultDriver]; ok {
 		return hasher, nil
 	}
-	return nil, fmt.Errorf("hasher not found for driver %s", driver)
+	err := fmt.Errorf("hasher not found for driver %s", m.defaultDriver)
+	return nil, fmt.Errorf("get hasher: %w", err)
 }
 
 func (m *manager) RegisterHasher(d Driver, hasher Hasher) error {
@@ -67,9 +68,9 @@ func (m *manager) RegisterHasher(d Driver, hasher Hasher) error {
 
 // Hash hashes a plaintext
 func (m *manager) Hash(password string) (string, error) {
-	hasher, err := m.getHasher(m.defaultDriver)
+	hasher, err := m.getDefaultHasher()
 	if err != nil {
-		return "", fmt.Errorf("get hasher: %w", err)
+		return "", err
 	}
 
 	return hasher.Hash(password)
@@ -77,9 +78,9 @@ func (m *manager) Hash(password string) (string, error) {
 
 // Check checks if the given password matches the hashed password
 func (m *manager) Check(password, hash string) (bool, error) {
-	hasher, err := m.getHasher(m.defaultDriver)
+	hasher, err := m.getDefaultHasher()
 	if err != nil {
-		return false, fmt.Errorf("get hasher: %w", err)
+		return false, err
 	}
 
 	return hasher.Check(password, hash)
