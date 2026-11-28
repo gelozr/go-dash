@@ -5,19 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/gelozr/go-dash/internal/db"
 	"github.com/gelozr/go-dash/internal/logger"
 )
-
-type userModel struct {
-	ID       uuid.UUID `gorm:"type:char(36);not nullable;unique;primary_key"`
-	Name     string    `gorm:"type:varchar(255);not nullable"`
-	Email    string    `gorm:"type:varchar(255);not nullable;unique"`
-	Password string    `gorm:"type:text;not nullable"`
-}
 
 type GormStore struct {
 	db     *db.DB
