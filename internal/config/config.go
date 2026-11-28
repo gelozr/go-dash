@@ -52,7 +52,6 @@ func Load() (*Config, error) {
 	// BindStruct makes Unmarshal read env vars for every field, not only keys that also appear in .env
 	v := viper.NewWithOptions(viper.ExperimentalBindStruct())
 	v.SetConfigFile(".env")
-	v.SetConfigType("env")
 	if err := v.ReadInConfig(); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("reading .env: %w", err)
 	}
