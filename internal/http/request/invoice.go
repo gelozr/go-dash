@@ -14,7 +14,7 @@ import (
 
 type CreateInvoice struct {
 	CustomerID string  `json:"customer_id" form:"customer_id" validate:"required"`
-	Amount     float64 `json:"amount" validate:"required,gt=0"`
+	Amount     float64 `json:"amount" validate:"required,gt=0,lt=+Inf"`
 	Status     string  `json:"status" validate:"required,oneof=pending paid"`
 	Date       string  `json:"date" validate:"required,rfc3339"`
 }
@@ -42,7 +42,7 @@ func (req *CreateInvoice) ToInvoice() (invoice.Invoice, error) {
 
 type UpdateInvoice struct {
 	CustomerID *string  `json:"customer_id" form:"customer_id" validate:"omitnil,required,uuid4"`
-	Amount     *float64 `json:"amount" validate:"omitnil,min=0"`
+	Amount     *float64 `json:"amount" validate:"omitnil,min=0,lt=+Inf"`
 	Status     *string  `json:"status" validate:"omitnil,required,oneof=pending paid"`
 	Date       *string  `json:"date" validate:"omitnil,required,rfc3339"`
 	// Date Optional[nullable.Null[string]] `json:"date" validate:"omitnil,required,rfc3339"`
