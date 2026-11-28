@@ -59,6 +59,7 @@ func Load() (*Config, error) {
 
 	// allow real ENV to override
 	v.AutomaticEnv()
+	v.AllowEmptyEnv(true)
 
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
