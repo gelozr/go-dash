@@ -52,16 +52,11 @@ func SendWelcomeEmail(custSvc *customer.Service, mailer mail.Mailer) himoevent.H
 			return fmt.Errorf("SendWelcomeEmail: get customer by id: %w", err)
 		}
 
-		m := &mail.Message{
-			To: []mail.Address{{
-				Name:    cust.Name,
-				Address: cust.Email,
-			}},
+		if err := mailer.Send(ctx, &mail.Message{
+			To:      []mail.Address{{Name: cust.Name, Address: cust.Email}},
 			Subject: "Welcome subject",
 			HTML:    "<p>Welcome message</p>",
-		}
-
-		if err = mailer.Send(ctx, m); err != nil {
+		}); err != nil {
 			return fmt.Errorf("SendWelcomeEmail: send welcome email: %w", err)
 		}
 
