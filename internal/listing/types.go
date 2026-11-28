@@ -26,13 +26,11 @@ func NewPage(page int, size int) Page {
 
 	if size <= 0 {
 		size = 10
-	} else if size > 100 {
-		size = 100
 	}
 
 	return Page{
 		Page: page,
-		Size: size,
+		Size: min(size, 100),
 	}
 }
 
