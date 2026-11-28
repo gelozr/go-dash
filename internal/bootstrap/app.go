@@ -73,14 +73,11 @@ func (a *App) Run() error {
 		defer cancel()
 
 		// server first, so no request can publish an event after we start waiting on handlers
-		var errs []error
-		if err := a.server.Shutdown(shutCtx); err != nil {
-			errs = append(errs, fmt.Errorf("graceful shutdown failed, forcing close: %w", err))
+		shutdownErr := a.server.Shutdown(shutCtx)
+		if shutdownErr != nil {
+			shutdownErr = fmt.Errorf("graceful shutdown failed, forcing close: %w", shutdownErr)
 		}
-		if err := a.events.Wait(shutCtx); err != nil {
-			errs = append(errs, err)
-		}
-		return errors.Join(errs...)
+		return errors.Join(shutdownErr, a.events.Wait(shutCtx))
 	}
 }
 
@@ -89,13 +86,9 @@ func (a *App) Logger() logger.Logger {
 }
 
 func (a *App) Close() error {
-	var errs []error
-
+	var logErr error
 	if logCloser, ok := a.logger.(io.Closer); ok {
-		errs = append(errs, logCloser.Close())
+		logErr = logCloser.Close()
 	}
-
-	errs = append(errs, a.dbCloser.Close())
-
-	return errors.Join(errs...)
+	return errors.Join(logErr, a.dbCloser.Close())
 }
