@@ -31,10 +31,11 @@ type DB struct {
 // Conn returns the transaction stored in ctx by Do, or the base handle, bound to ctx.
 // Don't run concurrent queries on a ctx that holds a transaction: it's a single connection.
 func (d *DB) Conn(ctx context.Context) *gorm.DB {
-	if tx, ok := ctx.Value(dbTxKey).(*gorm.DB); ok {
-		return tx.WithContext(ctx)
+	conn, ok := ctx.Value(dbTxKey).(*gorm.DB)
+	if !ok {
+		conn = d.gorm
 	}
-	return d.gorm.WithContext(ctx)
+	return conn.WithContext(ctx)
 }
 
 // Do runs fn in a transaction. Inside another Do it joins the outer transaction through a savepoint.
