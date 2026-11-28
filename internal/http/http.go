@@ -2,7 +2,9 @@ package http
 
 import (
 	"context"
+	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -33,21 +35,18 @@ func UserIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
 	return v, ok
 }
 
-func getDefaultNum[T any](value string, def T) T {
-	switch any(def).(type) {
-	case int, int8, int16, int32, int64:
-		i, err := strconv.Atoi(value)
-		if err != nil {
-			return def
-		}
-		return any(i).(T)
-	case float32, float64:
-		f, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return def
-		}
-		return any(f).(T)
-	default:
-		return def
+func getDefaultInt(value string, def int) int {
+	n, err := strconv.Atoi(value)
+	if err == nil {
+		return n
 	}
+
+	// Atoi can report overflow before checking the remaining digits.
+	if errors.Is(err, strconv.ErrRange) {
+		digits := strings.TrimLeft(value, "+-")
+		if strings.TrimLeft(digits, "0123456789") == "" {
+			return n
+		}
+	}
+	return def
 }

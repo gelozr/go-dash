@@ -57,7 +57,7 @@ func (h *InvoiceHandler) Get(c fiber.Ctx) error {
 }
 
 func (h *InvoiceHandler) GetLatest(c fiber.Ctx) error {
-	limit := min(max(getDefaultNum(c.Query("limit"), 5), 1), 100)
+	limit := min(max(getDefaultInt(c.Query("limit"), 5), 1), 100)
 
 	invs, err := h.invSvc.ListWithCustomerInfo(c.Context(), listing.SortLatest, limit)
 	if err != nil {
@@ -70,8 +70,8 @@ func (h *InvoiceHandler) GetLatest(c fiber.Ctx) error {
 }
 
 func (h *InvoiceHandler) Search(c fiber.Ctx) error {
-	size := getDefaultNum(c.Query("size"), 10)
-	page := getDefaultNum(c.Query("page"), 1)
+	size := getDefaultInt(c.Query("size"), 10)
+	page := getDefaultInt(c.Query("page"), 1)
 
 	p := listing.NewPage(page, size)
 
