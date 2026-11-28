@@ -98,28 +98,27 @@ func (g *Validator) ValidateStruct(ctx context.Context, s any) error {
 }
 
 func (g *Validator) buildErrors(ctx context.Context, err error) error {
-	if err != nil {
-		var vErrs validator.ValidationErrors
-
-		locale := http.Locale(ctx)
-
-		if errors.As(err, &vErrs) {
-			trans, found := g.uni.GetTranslator(locale)
-			if !found {
-				trans, _ = g.uni.GetTranslator("en")
-			}
-
-			errs := make(validation.Errors, len(vErrs))
-			for _, vErr := range vErrs {
-				f := vErr.Field()
-				errs[f] = append(errs[f], vErr.Translate(trans))
-			}
-
-			return errs
-		}
+	if err == nil {
+		return nil
 	}
 
-	return err
+	locale := http.Locale(ctx)
+	var vErrs validator.ValidationErrors
+	if !errors.As(err, &vErrs) {
+		return err
+	}
+
+	trans, found := g.uni.GetTranslator(locale)
+	if !found {
+		trans, _ = g.uni.GetTranslator("en")
+	}
+
+	errs := make(validation.Errors, len(vErrs))
+	for _, vErr := range vErrs {
+		f := vErr.Field()
+		errs[f] = append(errs[f], vErr.Translate(trans))
+	}
+	return errs
 }
 
 func registerOptionalType[T any](validator *validator.Validate) {
