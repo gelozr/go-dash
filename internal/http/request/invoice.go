@@ -57,9 +57,9 @@ func (req *UpdateInvoice) UnmarshalJSON(data []byte) error {
 	type invoiceFields UpdateInvoice
 	body := struct {
 		*invoiceFields
-		CustomerID optional.Optional[*string] `json:"customer_id"`
-		Status     optional.Optional[string]  `json:"status"`
-		Date       optional.Optional[*string] `json:"date"`
+		CustomerID optional.Optional[string] `json:"customer_id"`
+		Status     optional.Optional[string] `json:"status"`
+		Date       optional.Optional[string] `json:"date"`
 	}{invoiceFields: (*invoiceFields)(req)}
 	if err := json.Unmarshal(data, &body); err != nil {
 		return err
@@ -69,11 +69,11 @@ func (req *UpdateInvoice) UnmarshalJSON(data []byte) error {
 		req.Status = &body.Status.Val
 	}
 	if body.CustomerID.IsPresent {
-		req.CustomerID = body.CustomerID.Val
+		req.CustomerID = body.CustomerID.Ptr()
 		req.clearCustomerID = body.CustomerID.IsNull
 	}
 	if body.Date.IsPresent {
-		req.Date = body.Date.Val
+		req.Date = body.Date.Ptr()
 		req.clearDate = body.Date.IsNull
 	}
 	return nil
