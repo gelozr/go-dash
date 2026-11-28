@@ -231,6 +231,43 @@ func TestUpdateInvoiceAmount(t *testing.T) {
 	}
 }
 
+func TestInvoiceRejectsInfiniteAmount(t *testing.T) {
+	validator, err := gp.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &invoiceRequestStore{}
+	log := invoiceRequestLogger{}
+	handler := dashhttp.NewInvoiceHandler(invoice.NewService(store, store, store, log), validator, log)
+	app := fiber.New()
+	app.Use(dashhttp.ValidationResponse())
+	app.Post("/invoices", handler.Create)
+	app.Patch("/invoices/:id", handler.Update)
+
+	const id = "ef7f5245-14ea-4b8b-9869-7f0f86dc7bdc"
+	const date = "2026-11-27T12:00:00Z"
+	for _, tt := range []struct {
+		name, method, path, contentType, body string
+	}{
+		{"create XML", http.MethodPost, "/invoices", fiber.MIMEApplicationXML, "<CreateInvoice><CustomerID>" + id + "</CustomerID><Amount>Inf</Amount><Status>paid</Status><Date>" + date + "</Date></CreateInvoice>"},
+		{"patch XML", http.MethodPatch, "/invoices/" + id, fiber.MIMEApplicationXML, "<UpdateInvoice><Amount>Inf</Amount></UpdateInvoice>"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", tt.contentType)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnprocessableEntity {
+				body, err := io.ReadAll(resp.Body)
+				t.Fatalf("HTTP status = %d, want %d. Body %q, read error %v", resp.StatusCode, http.StatusUnprocessableEntity, body, err)
+			}
+		})
+	}
+}
+
 func TestUpdateInvoiceCustomerAndDateBodyFormats(t *testing.T) {
 	const id = "ef7f5245-14ea-4b8b-9869-7f0f86dc7bdc"
 	const date = "2026-11-27T12:00:00Z"
