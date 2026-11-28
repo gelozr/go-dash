@@ -55,8 +55,7 @@ func (d *DB) Close() error {
 func Open(cfg *config.Config, log logger.Logger) (*DB, error) {
 	wd, _ := os.Getwd()
 
-	logLevel := gormlogger.Warn
-	l := &dbLogger{Logger: log, level: logLevel, basePath: wd}
+	l := &dbLogger{Logger: log, basePath: wd}
 
 	db, err := gorm.Open(mysql.Open(mysqlDSN(cfg)), &gorm.Config{
 		TranslateError: true,
@@ -65,7 +64,7 @@ func Open(cfg *config.Config, log logger.Logger) (*DB, error) {
 			Colorful:                  false,
 			IgnoreRecordNotFoundError: true,
 			ParameterizedQueries:      true,
-			LogLevel:                  logLevel,
+			LogLevel:                  gormlogger.Warn,
 		}),
 	})
 	if err != nil {
@@ -100,7 +99,6 @@ type TxManager interface {
 
 type dbLogger struct {
 	logger.Logger
-	level    gormlogger.LogLevel
 	basePath string
 }
 
@@ -110,12 +108,5 @@ func (l dbLogger) Printf(format string, v ...interface{}) {
 	msg = strings.ReplaceAll(msg, "\n", " ")
 	msg = strings.ReplaceAll(msg, l.basePath+string(filepath.Separator), "")
 
-	switch l.level {
-	case gormlogger.Error:
-		l.Error(msg)
-	case gormlogger.Warn:
-		l.Warn(msg)
-	default:
-		l.Info(msg)
-	}
+	l.Warn(msg)
 }
