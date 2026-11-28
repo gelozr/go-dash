@@ -28,18 +28,13 @@ type Paginated[T any] struct {
 
 // PaginateList converts a listing.Result[S] to Paginated[R]
 func PaginateList[S, R any](res listing.Result[S], mapper func(S) R) Paginated[R] {
-	data := make([]R, len(res.Items))
-	for i, v := range res.Items {
-		data[i] = mapper(v)
-	}
-
 	return Paginated[R]{
 		Total:       res.Total,
 		CurrentPage: res.Page,
 		PerPage:     res.PerPage,
 		HasNext:     res.HasNext,
 		HasPrev:     res.HasPrev,
-		Data:        data,
+		Data:        ToList(res.Items, mapper),
 	}
 }
 

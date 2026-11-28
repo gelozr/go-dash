@@ -53,9 +53,5 @@ func ToInvoiceWithCustomerInfo(inv invoice.WithCustomerInfo) InvoiceWithCustomer
 }
 
 func ToInvoicesWithCustomerInfo(invs []invoice.WithCustomerInfo) []InvoiceWithCustomerInfo {
-	rs := make([]InvoiceWithCustomerInfo, len(invs))
-	for i := range invs {
-		rs[i] = ToInvoiceWithCustomerInfo(invs[i])
-	}
-	return rs
+	return ToList(invs, ToInvoiceWithCustomerInfo)
 }
