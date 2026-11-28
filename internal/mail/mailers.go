@@ -41,16 +41,16 @@ func NewSMTPMailer(cfg *config.Config) *SMTPMailer {
 
 func (s *SMTPMailer) buildMessageID(sb *strings.Builder, m *Message) {
 	domain := m.From.Address[strings.LastIndex(m.From.Address, "@")+1:]
-	sb.WriteString(fmt.Sprintf("Message-ID: <%d.%s@%s>\r\n", time.Now().UnixNano(), uuid.NewString(), domain))
+	fmt.Fprintf(sb, "Message-ID: <%d.%s@%s>\r\n", time.Now().UnixNano(), uuid.NewString(), domain)
 }
 
 func (s *SMTPMailer) buildDate(sb *strings.Builder) {
-	sb.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
+	fmt.Fprintf(sb, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 }
 
 func (s *SMTPMailer) buildFrom(sb *strings.Builder, m *Message) {
 	from := mail.Address{Name: m.From.Name, Address: m.From.Address}
-	sb.WriteString(fmt.Sprintf("From: %s\r\n", from.String()))
+	fmt.Fprintf(sb, "From: %s\r\n", from.String())
 }
 
 func (s *SMTPMailer) buildTo(sb *strings.Builder, m *Message) {
@@ -60,7 +60,7 @@ func (s *SMTPMailer) buildTo(sb *strings.Builder, m *Message) {
 			to := mail.Address{Name: a.Name, Address: a.Address}
 			toList[i] = to.String()
 		}
-		sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(toList, ", ")))
+		fmt.Fprintf(sb, "To: %s\r\n", strings.Join(toList, ", "))
 	}
 }
 
@@ -159,7 +159,7 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 		return err
 	}
 
-	sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=%s\r\n", boundary))
+	fmt.Fprintf(&sb, "Content-Type: multipart/alternative; boundary=%s\r\n", boundary)
 	sb.WriteString("\r\n") // end of headers
 
 	if err := s.buildBody(&sb, m, boundary); err != nil {
@@ -167,7 +167,7 @@ func (s *SMTPMailer) Send(ctx context.Context, m *Message) (err error) {
 	}
 
 	// closing boundary
-	sb.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+	fmt.Fprintf(&sb, "--%s--\r\n", boundary)
 
 	host := s.Host
 	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
