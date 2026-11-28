@@ -1,9 +1,10 @@
 package dashboard
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/gelozr/go-dash/internal/logger"
 )
@@ -34,8 +35,8 @@ func (s *Service) GetMonthlyRevenues(ctx context.Context) ([]MonthlyRevenue, err
 		return nil, fmt.Errorf("list monthly revenues: %w", err)
 	}
 
-	sort.Slice(revs, func(i, j int) bool {
-		return monthOrder[revs[i].Month] < monthOrder[revs[j].Month]
+	slices.SortFunc(revs, func(a, b MonthlyRevenue) int {
+		return cmp.Compare(monthOrder[a.Month], monthOrder[b.Month])
 	})
 
 	return revs, nil
