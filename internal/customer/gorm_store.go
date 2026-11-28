@@ -36,24 +36,6 @@ func (c *customerModel) TableName() string {
 	return "customers"
 }
 
-func toModel(c Customer) customerModel {
-	return customerModel{
-		ID:       c.ID,
-		Name:     c.Name,
-		Email:    c.Email,
-		ImageURL: c.ImageURL,
-	}
-}
-
-func toEntity(c customerModel) Customer {
-	return Customer{
-		ID:       c.ID,
-		Name:     c.Name,
-		Email:    c.Email,
-		ImageURL: c.ImageURL,
-	}
-}
-
 type GormStore struct {
 	db     *db.DB
 	logger logger.Logger
@@ -79,7 +61,7 @@ func (s *GormStore) List(ctx context.Context) ([]Customer, error) {
 	customers := make([]Customer, len(models))
 
 	for i, m := range models {
-		customers[i] = toEntity(m)
+		customers[i] = Customer(m)
 	}
 
 	return customers, nil
@@ -97,7 +79,7 @@ func (s *GormStore) Find(ctx context.Context, id uuid.UUID) (*Customer, error) {
 		}
 	}
 
-	c := toEntity(model)
+	c := Customer(model)
 	return &c, nil
 }
 
@@ -124,7 +106,7 @@ func (s *GormStore) ExistsByEmail(ctx context.Context, email string) (bool, erro
 }
 
 func (s *GormStore) Insert(ctx context.Context, c Customer) (*Customer, error) {
-	model := toModel(c)
+	model := customerModel(c)
 
 	if err := s.db.Conn(ctx).Create(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
@@ -133,7 +115,7 @@ func (s *GormStore) Insert(ctx context.Context, c Customer) (*Customer, error) {
 		return nil, fmt.Errorf("store customer: %w", err)
 	}
 
-	c = toEntity(model)
+	c = Customer(model)
 
 	return &c, nil
 }
