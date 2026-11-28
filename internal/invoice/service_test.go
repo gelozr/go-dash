@@ -19,10 +19,11 @@ func (f fakeCustomers) Exists(_ context.Context, id uuid.UUID) (bool, error) { r
 // fakeStore embeds Store so it only implements what Create and Update reach; anything else panics.
 type fakeStore struct {
 	Store
-	writes *int
+	writes  *int
+	lockErr error
 }
 
-func (fakeStore) Exists(context.Context, uuid.UUID) (bool, error) { return true, nil }
+func (f fakeStore) LockForUpdate(context.Context, uuid.UUID) error { return f.lockErr }
 func (f fakeStore) Insert(_ context.Context, i Invoice) (*Invoice, error) {
 	*f.writes++
 	return &i, nil
@@ -100,6 +101,15 @@ func TestUpdate_CustomerMustExist(t *testing.T) {
 		if want := btoi(tc.wantErr == nil); *writes != want {
 			t.Errorf("%s: %d updates, want %d", name, *writes, want)
 		}
+	}
+}
+
+func TestUpdate_InvoiceMustExist(t *testing.T) {
+	writes := 0
+	s := NewService(fakeStore{writes: &writes, lockErr: ErrInvoiceNotFound}, nil, noTx{}, nopLogger{})
+	_, err := s.Update(t.Context(), uuid.New(), UpdateInput{Status: "paid"})
+	if !errors.Is(err, ErrInvoiceNotFound) || writes != 0 {
+		t.Fatalf("update error = %v, writes = %d, want ErrInvoiceNotFound and zero writes", err, writes)
 	}
 }
 

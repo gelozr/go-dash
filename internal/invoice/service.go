@@ -60,14 +60,6 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Invoice, error) {
 	return inv, nil
 }
 
-func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
-	exists, err := s.store.Exists(ctx, id)
-	if err != nil {
-		return false, fmt.Errorf("exists invoice: %w", err)
-	}
-	return exists, nil
-}
-
 // Create saves an Invoice for an existing Customer.
 func (s *Service) Create(ctx context.Context, inv Invoice) (*Invoice, error) {
 	if inv.CustomerID == nil {
@@ -97,24 +89,21 @@ func (s *Service) Create(ctx context.Context, inv Invoice) (*Invoice, error) {
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateInput) (*Invoice, error) {
 	var out *Invoice
 	err := s.txm.Do(ctx, func(ctx context.Context) error {
-		exists, err := s.Exists(ctx, id)
-		if err != nil {
+		if err := s.store.LockForUpdate(ctx, id); err != nil {
 			return err
-		}
-		if !exists {
-			return ErrInvoiceNotFound
 		}
 
 		if req.CustomerID.IsPresent && !req.CustomerID.IsNull {
-			if err = s.customerMustExist(ctx, req.CustomerID.Val); err != nil {
+			if err := s.customerMustExist(ctx, req.CustomerID.Val); err != nil {
 				return err
 			}
 		}
 
-		if err = s.store.Update(ctx, id, req); err != nil {
+		if err := s.store.Update(ctx, id, req); err != nil {
 			return fmt.Errorf("update invoice: %w", err)
 		}
 
+		var err error
 		out, err = s.Get(ctx, id)
 		return err
 	})

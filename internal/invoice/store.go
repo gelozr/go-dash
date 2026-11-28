@@ -16,7 +16,7 @@ var ErrInvoiceNotFound = errors.New("invoice not found")
 type Store interface {
 	Search(context.Context, SearchFilter, listing.Page) ([]Invoice, int64, error)
 	Find(context.Context, uuid.UUID) (*Invoice, error)
-	Exists(context.Context, uuid.UUID) (bool, error)
+	LockForUpdate(context.Context, uuid.UUID) error
 	Insert(context.Context, Invoice) (*Invoice, error)
 	Update(context.Context, uuid.UUID, UpdateInput) error
 	Delete(context.Context, uuid.UUID) error
