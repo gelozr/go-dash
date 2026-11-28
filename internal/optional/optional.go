@@ -114,22 +114,11 @@ func Of[T any](v T) Optional[T] {
 }
 
 func FromPtr[T any](v *T) Optional[T] {
-	var (
-		n      T
-		isNull bool
-	)
-
-	if v != nil {
-		n = *v
-	} else {
-		isNull = true
+	if v == nil {
+		return Optional[T]{IsPresent: true, IsNull: true}
 	}
 
-	return Optional[T]{
-		Val:       n,
-		IsPresent: true,
-		IsNull:    isNull,
-	}
+	return Of(*v)
 }
 
 // Ptr returns nil when the value is missing or null, so a NULL column doesn't read back as the zero value.
